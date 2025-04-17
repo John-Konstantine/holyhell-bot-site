@@ -35,6 +35,6 @@ class User(Base):
         return fernet.decrypt(self.telegram_token_encrypted.encode()).decode()
 
 # Подключение к SQLite
-engine = create_engine("sqlite:///./instance/database.db")
+engine = create_engine("sqlite:///./database.db", connect_args={"check_same_thread": False})
 Base.metadata.create_all(bind=engine)
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
