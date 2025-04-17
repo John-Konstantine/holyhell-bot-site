@@ -1,3 +1,10 @@
+import os
+
+# Удаляем базу до импортов, иначе models уже её создаст
+os.makedirs("instance", exist_ok=True)
+if os.path.exists("instance/database.db"):
+    os.remove("instance/database.db")
+
 from fastapi import FastAPI, Request, Form, Depends, HTTPException
 from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
@@ -7,14 +14,9 @@ from sqlalchemy.orm import Session
 from models import User, SessionLocal, fernet
 from passlib.hash import bcrypt
 from datetime import datetime, timedelta
-import os
 import random
 import time
 import requests
-
-# ❗ ВРЕМЕННОЕ УДАЛЕНИЕ БАЗЫ ПРИ СТАРТЕ (чтобы убрать ошибку InvalidToken)
-if os.path.exists("database.db"):
-    os.remove("database.db")
 
 
 app = FastAPI(
