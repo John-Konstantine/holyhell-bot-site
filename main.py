@@ -12,6 +12,11 @@ import random
 import time
 import requests
 
+# ❗ ВРЕМЕННОЕ УДАЛЕНИЕ БАЗЫ ПРИ СТАРТЕ (чтобы убрать ошибку InvalidToken)
+if os.path.exists("database.db"):
+    os.remove("database.db")
+
+
 app = FastAPI(
     title="Сайт торгового бота",
     description="Сервер для хранения и выдачи ключей пользователям",
