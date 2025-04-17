@@ -1,22 +1,22 @@
 import os
-
-# Удаляем базу до импортов, иначе models уже её создаст
-os.makedirs("instance", exist_ok=True)
-if os.path.exists("instance/database.db"):
-    os.remove("instance/database.db")
+import random
+import time
+import requests
+from datetime import datetime, timedelta
 
 from fastapi import FastAPI, Request, Form, Depends, HTTPException
 from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
-from pydantic import BaseModel, Field
+
+from pydantic import BaseModel
 from sqlalchemy.orm import Session
-from models import User, SessionLocal, fernet
 from passlib.hash import bcrypt
-from datetime import datetime, timedelta
-import random
-import time
-import requests
+
+from models import User, SessionLocal, fernet
+
+# Убедимся, что папка для базы существует
+os.makedirs("instance", exist_ok=True)
 
 
 app = FastAPI(
