@@ -14,9 +14,8 @@ from sqlalchemy.orm import Session
 from passlib.hash import bcrypt
 
 from models import User, SessionLocal, fernet
-
-# Убедимся, что папка для базы существует
-os.makedirs("instance", exist_ok=True)
+from dotenv import load_dotenv
+load_dotenv()
 
 
 app = FastAPI(
@@ -107,9 +106,15 @@ def login_user_form(
     if not bcrypt.verify(password, user.password_hash):
         return templates.TemplateResponse("login.html", {"request": request, "error": "Неверный пароль"})
 
+    # Проверка Telegram ID для администраторского доступа
+    is_admin = user.telegram_id == "6393934084"  # Замените на ваш реальный Telegram ID
+
+    # Устанавливаем куки с логином и флагом админа
     response = RedirectResponse(url="/dashboard", status_code=303)
     response.set_cookie(key="login", value=login.encode('utf-8').hex())
+    response.set_cookie(key="is_admin", value="True" if is_admin else "False")
     return response
+
 
 
 # --------------------------- JSON-API для ПРИЛОЖЕНИЯ (с HWID) ---------------------------
@@ -278,4 +283,18 @@ def extend_subscription(request: Request, login: str = Form(...), db: Session = 
 
     return RedirectResponse(url="/dashboard", status_code=303)
 
+
+from fastapi.responses import JSONResponse
+
+@app.get("/debug/users")
+def debug_users(db: Session = Depends(get_db)):
+    users = db.query(User).all()
+    return JSONResponse(content=[{"id": u.id, "login": u.login} for u in users])
+
+@app.get("/view_users", response_class=HTMLResponse)
+def view_users(request: Request, db: Session = Depends(get_db)):
+    # Получаем всех пользователей из базы данных
+    users = db.query(User).all()
+    # Передаем данные в шаблон
+    return templates.TemplateResponse("view_users.html", {"request": request, "users": users})
 

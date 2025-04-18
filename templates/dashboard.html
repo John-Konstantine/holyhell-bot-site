@@ -145,9 +145,15 @@
         <div class="label">Telegram Token:</div>
         <div class="value">{{ telegram_token }}</div>
 
-        <hr>
-        <h3>🖥️ Сброс привязки к устройству (HWID)</h3>
+        <!-- Проверка на админа и отображение кнопки -->
+        {% if request.cookies['is_admin'] == 'True' %}
+            <a href="/view_users"><button>Просмотр пользователей</button></a>
+        {% endif %}
 
+        <hr>
+
+        <!-- Сброс HWID -->
+        <h3>🖥️ Сброс привязки к устройству (HWID)</h3>
         {% if hwid_reset_success %}
             <p class="success">HWID успешно сброшен ✅</p>
         {% elif hwid_reset_error %}
@@ -168,10 +174,14 @@
         {% endif %}
 
         <hr>
+
+        <!-- Скачать бота -->
         <h3>⬇️ Скачать бота</h3>
         <a href="/downloads/bot_release.zip" download class="button">📦 Скачать</a>
 
         <hr>
+
+        <!-- Информация о подписке -->
         <h3>📅 Подписка</h3>
 
         {% if subscription_active %}
@@ -189,6 +199,8 @@
         </form>
 
         <hr>
+
+        <!-- Выход -->
         <form method="post" action="/logout">
             <button type="submit">🚪 Выйти</button>
         </form>
