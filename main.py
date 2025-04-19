@@ -2,8 +2,9 @@ import os
 import random
 import time
 import requests
+import logging
+from pathlib import Path
 from datetime import datetime, timedelta
-
 from fastapi import FastAPI, Request, Form, Depends, HTTPException
 from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
@@ -39,6 +40,35 @@ def get_db():
         db.close()
 
 pending_hwid_resets = {}
+pending_admin_logins = {}  # login: {"code": str, "timestamp": float}
+pending_admin_actions = {}  # login: {code, timestamp}
+
+LOG_DIR = Path("logs")
+LOG_DIR.mkdir(exist_ok=True)
+LOG_FILE = LOG_DIR / "admin_actions.log"
+
+def log_admin_action(admin_login: str, action: str, target_login: str):
+    messages = {
+        "extend": "Продление подписки",
+        "freeze": "Заморозка подписки",
+        "delete": "Удаление пользователя"
+    }
+    action_str = messages.get(action, action)
+    timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    line = f"[{timestamp}] Администратор: {admin_login} | Действие: {action_str} | Пользователь: {target_login}"
+    with open(LOG_FILE, "a", encoding="utf-8") as f:
+        f.write(line + "\n")
+
+
+def check_admin_code(login: str, code: str):
+    if login not in pending_admin_actions:
+        return False
+    expected = pending_admin_actions[login]
+    if expected["code"] != code:
+        return False
+    if time.time() - expected["timestamp"] > 300:
+        return False
+    return True
 
 @app.get("/", response_class=HTMLResponse)
 def index(request: Request):
@@ -106,15 +136,28 @@ def login_user_form(
     if not bcrypt.verify(password, user.password_hash):
         return templates.TemplateResponse("login.html", {"request": request, "error": "Неверный пароль"})
 
-    # Проверка Telegram ID для администраторского доступа
-    is_admin = user.telegram_id == "6393934084"  # Замените на ваш реальный Telegram ID
+    is_admin = user.telegram_id == "6393934084"  # Укажи свой Telegram ID
 
-    # Устанавливаем куки с логином и флагом админа
     response = RedirectResponse(url="/dashboard", status_code=303)
     response.set_cookie(key="login", value=login.encode('utf-8').hex())
-    response.set_cookie(key="is_admin", value="True" if is_admin else "False")
-    return response
 
+    if is_admin:
+        # Генерация кода
+        code = f"{random.randint(100000, 999999)}"
+        pending_admin_logins[login] = {"code": code, "timestamp": time.time()}
+
+        # Отправка в Telegram
+        try:
+            url = f"https://api.telegram.org/bot{user.decrypt_telegram_token()}/sendMessage"
+            requests.post(url, data={"chat_id": user.telegram_id, "text": f"Код подтверждения входа администратора: {code}"})
+        except Exception as e:
+            print("Ошибка Telegram:", e)
+
+        return RedirectResponse(url="/admin-confirm", status_code=303)
+
+    # Если обычный пользователь
+    response.set_cookie(key="is_admin", value="False")
+    return response
 
 
 # --------------------------- JSON-API для ПРИЛОЖЕНИЯ (с HWID) ---------------------------
@@ -293,8 +336,112 @@ def debug_users(db: Session = Depends(get_db)):
 
 @app.get("/view_users", response_class=HTMLResponse)
 def view_users(request: Request, db: Session = Depends(get_db)):
-    # Получаем всех пользователей из базы данных
     users = db.query(User).all()
-    # Передаем данные в шаблон
-    return templates.TemplateResponse("view_users.html", {"request": request, "users": users})
+
+    log_entries = []
+    if LOG_FILE.exists():
+        with open(LOG_FILE, encoding="utf-8") as f:
+            log_entries = f.read().splitlines()
+
+    return templates.TemplateResponse("view_users.html", {
+        "request": request,
+        "users": users,
+        "log_entries": log_entries
+    })
+
+@app.post("/admin/send-code")
+def send_admin_code(login: str = Form(...), db: Session = Depends(get_db)):
+    user = db.query(User).filter(User.login == login).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="Пользователь не найден")
+
+    code = f"{random.randint(100000, 999999)}"
+    pending_admin_actions[login] = {"code": code, "timestamp": time.time()}
+
+    try:
+        url = f"https://api.telegram.org/bot{user.decrypt_telegram_token()}/sendMessage"
+        text = f"Код подтверждения администратора: {code}"
+        requests.post(url, data={"chat_id": user.telegram_id, "text": text})
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Ошибка Telegram: {e}")
+
+    return RedirectResponse(url="/view_users", status_code=303)
+
+@app.post("/admin/extend")
+def extend_by_admin(login: str = Form(...), code: str = Form(...), db: Session = Depends(get_db)):
+    if not check_admin_code(login, code):
+        raise HTTPException(status_code=400, detail="Неверный или просроченный код")
+
+    user = db.query(User).filter(User.login == login).first()
+    if user:
+        if user.subscription_expires_at and user.subscription_expires_at > datetime.utcnow():
+            user.subscription_expires_at += timedelta(days=30)
+        else:
+            user.subscription_expires_at = datetime.utcnow() + timedelta(days=30)
+        db.commit()
+        log_admin_action("admin", "extend", login)
+    return RedirectResponse(url="/view_users", status_code=303)
+
+@app.post("/admin/freeze")
+def freeze_by_admin(login: str = Form(...), code: str = Form(...), db: Session = Depends(get_db)):
+    if not check_admin_code(login, code):
+        raise HTTPException(status_code=400, detail="Неверный или просроченный код")
+
+    user = db.query(User).filter(User.login == login).first()
+    if user:
+        user.subscription_expires_at = None
+        db.commit()
+        log_admin_action("admin", "freeze", login)
+    return RedirectResponse(url="/view_users", status_code=303)
+
+@app.post("/admin/delete")
+def delete_by_admin(login: str = Form(...), code: str = Form(...), db: Session = Depends(get_db)):
+    if not check_admin_code(login, code):
+        raise HTTPException(status_code=400, detail="Неверный или просроченный код")
+
+    user = db.query(User).filter(User.login == login).first()
+    if user:
+        db.delete(user)
+        db.commit()
+        log_admin_action("admin", "delete", login)
+    return RedirectResponse(url="/view_users", status_code=303)
+
+@app.get("/admin-confirm", response_class=HTMLResponse)
+def show_admin_confirm_page(request: Request):
+    return templates.TemplateResponse("admin_confirm.html", {"request": request})
+
+
+@app.post("/admin-confirm", response_class=HTMLResponse)
+def confirm_admin_code(
+    request: Request,
+    code: str = Form(...),
+    db: Session = Depends(get_db)
+):
+    login_hex = request.cookies.get("login")
+    try:
+        login = bytes.fromhex(login_hex).decode('utf-8') if login_hex else None
+    except:
+        login = None
+
+    if not login or login not in pending_admin_logins:
+        return templates.TemplateResponse("admin_confirm.html", {
+            "request": request,
+            "error": "Доступ запрещён или код не запрашивался"
+        })
+
+    expected = pending_admin_logins[login]
+    if expected["code"] != code or time.time() - expected["timestamp"] > 300:
+        return templates.TemplateResponse("admin_confirm.html", {
+            "request": request,
+            "error": "Неверный или просроченный код"
+        })
+
+    # Успешно подтверждено
+    response = RedirectResponse(url="/dashboard", status_code=303)
+    response.set_cookie(key="is_admin", value="True")
+    return response
+
+
+
+
 
