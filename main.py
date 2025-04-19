@@ -154,11 +154,9 @@ def login_user_form(
     response.set_cookie(key="login", value=login.encode('utf-8').hex())
 
     if is_admin:
-        # Генерация кода
         code = f"{random.randint(100000, 999999)}"
-        pending_admin_logins[login] = {"code": code, "timestamp": time.time()}
+        pending_admin_actions[login] = {"code": code, "timestamp": time.time()}
 
-        # Отправка в Telegram
         try:
             url = f"https://api.telegram.org/bot{user.decrypt_telegram_token()}/sendMessage"
             requests.post(url, data={"chat_id": user.telegram_id, "text": f"Код подтверждения входа администратора: {code}"})
@@ -166,6 +164,7 @@ def login_user_form(
             print("Ошибка Telegram:", e)
 
         return RedirectResponse(url="/admin-confirm", status_code=303)
+
 
     # Если обычный пользователь
     response.set_cookie(key="is_admin", value="False")
@@ -456,11 +455,6 @@ def delete_by_admin(
 
     return RedirectResponse(url="/view_users", status_code=303)
 
-@app.get("/admin-confirm", response_class=HTMLResponse)
-def show_admin_confirm_page(request: Request):
-    return templates.TemplateResponse("admin_confirm.html", {"request": request})
-
-
 @app.post("/admin-confirm", response_class=HTMLResponse)
 def confirm_admin_code(
     request: Request,
@@ -473,7 +467,7 @@ def confirm_admin_code(
     except:
         login = None
 
-    if not login or login not in pending_admin_logins:
+    if not login or login not in pending_admin_actions:  # <--- вот тут было logins, стало actions
         return templates.TemplateResponse("admin_confirm.html", {
             "request": request,
             "error": "Доступ запрещён или код не запрашивался",
@@ -482,7 +476,7 @@ def confirm_admin_code(
             }
         })
 
-    expected = pending_admin_logins[login]
+    expected = pending_admin_actions.get(login)
     if expected["code"] != code or time.time() - expected["timestamp"] > 300:
         remaining = max(0, int(300 - (time.time() - expected["timestamp"])))
         return templates.TemplateResponse("admin_confirm.html", {
