@@ -457,13 +457,26 @@ def delete_by_admin(
 
 @app.get("/admin-confirm", response_class=HTMLResponse)
 def show_admin_confirm_page(request: Request):
+    login_hex = request.cookies.get("login")
+    try:
+        login = bytes.fromhex(login_hex).decode("utf-8") if login_hex else None
+    except:
+        login = None
+
+    code_data = pending_admin_actions.get(login)
+    if code_data:
+        remaining = max(0, int(300 - (time.time() - code_data["timestamp"])))
+    else:
+        remaining = 0
+
     return templates.TemplateResponse("admin_confirm.html", {
         "request": request,
         "error": None,
         "debug": {
-            "remaining": "-"
+            "remaining": remaining
         }
     })
+
 
 @app.post("/admin-confirm", response_class=HTMLResponse)
 def confirm_admin_code(
