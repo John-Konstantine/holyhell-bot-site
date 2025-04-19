@@ -159,24 +159,25 @@ def login_user_form(
     samesite="lax"
 )
 
-
     if is_admin:
-        code = f"{random.randint(100000, 999999)}"
-        pending_admin_actions[login] = {"code": code, "timestamp": time.time()}
+    code = f"{random.randint(100000, 999999)}"
+    pending_admin_actions[login] = {"code": code, "timestamp": time.time()}
 
-        try:
-            url = f"https://api.telegram.org/bot{user.decrypt_telegram_token()}/sendMessage"
-            requests.post(url, data={"chat_id": user.telegram_id, "text": f"Код подтверждения входа администратора: {code}"})
-        except Exception as e:
-            print("Ошибка Telegram:", e)
+    try:
+        url = f"https://api.telegram.org/bot{user.decrypt_telegram_token()}/sendMessage"
+        requests.post(url, data={"chat_id": user.telegram_id, "text": f"Код подтверждения входа администратора: {code}"})
+    except Exception as e:
+        print("Ошибка Telegram:", e)
 
-        return RedirectResponse(url="/admin-confirm", status_code=303)
-
-
-    # Если обычный пользователь
-    response.set_cookie(key="is_admin", value="False")
+    response = RedirectResponse(url="/admin-confirm", status_code=303)
+    response.set_cookie(
+        key="login",
+        value=login.encode('utf-8').hex(),
+        httponly=False,
+        secure=False,
+        samesite="lax"
+    )
     return response
-
 
 # --------------------------- JSON-API для ПРИЛОЖЕНИЯ (с HWID) ---------------------------
 
