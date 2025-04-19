@@ -350,18 +350,32 @@ def view_users(request: Request, db: Session = Depends(get_db)):
     })
 
 @app.post("/admin/send-code")
-def send_admin_code(login: str = Form(...), db: Session = Depends(get_db)):
-    user = db.query(User).filter(User.login == login).first()
-    if not user:
-        raise HTTPException(status_code=404, detail="Пользователь не найден")
+def send_admin_code(
+    request: Request,
+    login: str = Form(...),
+    db: Session = Depends(get_db)
+):
+    # Получаем администратора
+    login_hex = request.cookies.get("login")
+    try:
+        admin_login = bytes.fromhex(login_hex).decode("utf-8") if login_hex else None
+    except:
+        admin_login = None
 
+    admin = db.query(User).filter(User.login == admin_login).first()
+    if not admin:
+        raise HTTPException(status_code=403, detail="Нет доступа")
+
+    # Генерация кода для подтверждения
     code = f"{random.randint(100000, 999999)}"
     pending_admin_actions[login] = {"code": code, "timestamp": time.time()}
 
     try:
-        url = f"https://api.telegram.org/bot{user.decrypt_telegram_token()}/sendMessage"
-        text = f"Код подтверждения администратора: {code}"
-        requests.post(url, data={"chat_id": user.telegram_id, "text": text})
+        token = admin.decrypt_telegram_token()
+        chat_id = admin.telegram_id
+        url = f"https://api.telegram.org/bot{token}/sendMessage"
+        text = f"Код подтверждения: {code}"
+        requests.post(url, data={"chat_id": chat_id, "text": text})
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Ошибка Telegram: {e}")
 
