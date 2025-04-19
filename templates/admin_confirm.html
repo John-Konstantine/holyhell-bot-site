@@ -70,7 +70,7 @@
     {% endif %}
 
     <div class="timer">
-        Действителен ещё: <span id="countdown">--:--</span>
+        Действителен ещё: <span id="countdown">—</span>
     </div>
 
     <form method="post">
@@ -83,15 +83,15 @@
     let totalSeconds = {{ debug.remaining if debug and debug.remaining != '-' else 0 }};
 
     function updateTimer() {
+        const el = document.getElementById("countdown");
         if (totalSeconds <= 0) {
-            document.getElementById("countdown").textContent = "Код истёк";
+            el.textContent = "Код истёк";
             return;
         }
 
         let minutes = Math.floor(totalSeconds / 60);
         let seconds = totalSeconds % 60;
-        document.getElementById("countdown").textContent =
-            `${minutes}:${String(seconds).padStart(2, '0')}`;
+        el.textContent = `${minutes}:${String(seconds).padStart(2, '0')}`;
         totalSeconds--;
         setTimeout(updateTimer, 1000);
     }
