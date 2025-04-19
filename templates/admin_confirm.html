@@ -52,6 +52,12 @@
             text-align: center;
             margin-bottom: 10px;
         }
+        .timer {
+            text-align: center;
+            color: #ccc;
+            font-size: 14px;
+            margin-bottom: 15px;
+        }
     </style>
 </head>
 <body>
@@ -63,11 +69,34 @@
         <p class="error">{{ error }}</p>
     {% endif %}
 
+    <div class="timer">
+        Действителен ещё: <span id="countdown">5:00</span>
+    </div>
+
     <form method="post">
         <input type="text" name="code" placeholder="Введите код из Telegram" required>
         <button type="submit">Подтвердить</button>
     </form>
 </div>
+
+<script>
+    let totalSeconds = 300;  // 5 минут
+
+    function updateTimer() {
+        let minutes = Math.floor(totalSeconds / 60);
+        let seconds = totalSeconds % 60;
+        document.getElementById("countdown").textContent =
+            `${String(minutes).padStart(1, '0')}:${String(seconds).padStart(2, '0')}`;
+        if (totalSeconds > 0) {
+            totalSeconds--;
+            setTimeout(updateTimer, 1000);
+        } else {
+            document.getElementById("countdown").textContent = "Код истёк";
+        }
+    }
+
+    updateTimer();
+</script>
 
 </body>
 </html>
