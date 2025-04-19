@@ -476,14 +476,21 @@ def confirm_admin_code(
     if not login or login not in pending_admin_logins:
         return templates.TemplateResponse("admin_confirm.html", {
             "request": request,
-            "error": "Доступ запрещён или код не запрашивался"
+            "error": "Доступ запрещён или код не запрашивался",
+            "debug": {
+                "remaining": "-"
+            }
         })
 
     expected = pending_admin_logins[login]
     if expected["code"] != code or time.time() - expected["timestamp"] > 300:
+        remaining = max(0, int(300 - (time.time() - expected["timestamp"])))
         return templates.TemplateResponse("admin_confirm.html", {
             "request": request,
-            "error": "Неверный или просроченный код"
+            "error": "Неверный или просроченный код",
+            "debug": {
+                "remaining": remaining
+            }
         })
 
     # Успешно подтверждено
