@@ -179,6 +179,14 @@ def login_user_form(
         )
         return response
 
+    # ✅ Это нужно для обычных пользователей
+    response.set_cookie(
+        key="is_admin",
+        value="False"
+    )
+    return response
+
+
 # --------------------------- JSON-API для ПРИЛОЖЕНИЯ (с HWID) ---------------------------
 
 class LoginRequest(BaseModel):
