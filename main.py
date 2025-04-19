@@ -455,6 +455,16 @@ def delete_by_admin(
 
     return RedirectResponse(url="/view_users", status_code=303)
 
+@app.get("/admin-confirm", response_class=HTMLResponse)
+def show_admin_confirm_page(request: Request):
+    return templates.TemplateResponse("admin_confirm.html", {
+        "request": request,
+        "error": None,
+        "debug": {
+            "remaining": "-"
+        }
+    })
+
 @app.post("/admin-confirm", response_class=HTMLResponse)
 def confirm_admin_code(
     request: Request,
