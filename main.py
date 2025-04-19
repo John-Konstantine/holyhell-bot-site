@@ -151,7 +151,14 @@ def login_user_form(
     is_admin = user.telegram_id == "6393934084"  # Укажи свой Telegram ID
 
     response = RedirectResponse(url="/dashboard", status_code=303)
-    response.set_cookie(key="login", value=login.encode('utf-8').hex())
+    response.set_cookie(
+    key="login",
+    value=login.encode('utf-8').hex(),
+    httponly=False,
+    secure=False,
+    samesite="lax"
+)
+
 
     if is_admin:
         code = f"{random.randint(100000, 999999)}"
