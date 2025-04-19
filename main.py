@@ -9,6 +9,7 @@ from fastapi import FastAPI, Request, Form, Depends, HTTPException
 from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
+from models import AdminLog
 
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
@@ -47,15 +48,26 @@ LOG_DIR = Path("logs")
 LOG_DIR.mkdir(exist_ok=True)
 LOG_FILE = LOG_DIR / "admin_actions.log"
 
-def log_admin_action(admin_login: str, action: str, target_login: str):
+def log_admin_action(admin_login: str, action: str, target_login: str, db: Session):
     messages = {
         "extend": "Продление подписки",
         "freeze": "Заморозка подписки",
         "delete": "Удаление пользователя"
     }
     action_str = messages.get(action, action)
-    timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    line = f"[{timestamp}] Администратор: {admin_login} | Действие: {action_str} | Пользователь: {target_login}"
+    timestamp = datetime.now()
+
+    # Сохраняем в базу
+    db.add(AdminLog(
+        admin_login=admin_login,
+        action=action_str,
+        target_login=target_login,
+        timestamp=timestamp
+    ))
+    db.commit()
+
+    # Сохраняем в файл
+    line = f"[{timestamp.strftime('%Y-%m-%d %H:%M:%S')}] Администратор: {admin_login} | Действие: {action_str} | Пользователь: {target_login}"
     with open(LOG_FILE, "a", encoding="utf-8") as f:
         f.write(line + "\n")
 
@@ -338,10 +350,7 @@ def debug_users(db: Session = Depends(get_db)):
 def view_users(request: Request, db: Session = Depends(get_db)):
     users = db.query(User).all()
 
-    log_entries = []
-    if LOG_FILE.exists():
-        with open(LOG_FILE, encoding="utf-8") as f:
-            log_entries = f.read().splitlines()
+    log_entries = db.query(AdminLog).order_by(AdminLog.timestamp.desc()).limit(100).all()
 
     return templates.TemplateResponse("view_users.html", {
         "request": request,
@@ -382,7 +391,12 @@ def send_admin_code(
     return RedirectResponse(url="/view_users", status_code=303)
 
 @app.post("/admin/extend")
-def extend_by_admin(login: str = Form(...), code: str = Form(...), db: Session = Depends(get_db)):
+def extend_by_admin(
+    request: Request,
+    login: str = Form(...),
+    code: str = Form(...),
+    db: Session = Depends(get_db)
+):
     if not check_admin_code(login, code):
         raise HTTPException(status_code=400, detail="Неверный или просроченный код")
 
@@ -393,11 +407,20 @@ def extend_by_admin(login: str = Form(...), code: str = Form(...), db: Session =
         else:
             user.subscription_expires_at = datetime.utcnow() + timedelta(days=30)
         db.commit()
-        log_admin_action("admin", "extend", login)
+
+        login_hex = request.cookies.get("login")
+        admin_login = bytes.fromhex(login_hex).decode("utf-8") if login_hex else "неизвестен"
+        log_admin_action(admin_login, "extend", login, db)
+
     return RedirectResponse(url="/view_users", status_code=303)
 
 @app.post("/admin/freeze")
-def freeze_by_admin(login: str = Form(...), code: str = Form(...), db: Session = Depends(get_db)):
+def freeze_by_admin(
+    request: Request,
+    login: str = Form(...),
+    code: str = Form(...),
+    db: Session = Depends(get_db)
+):
     if not check_admin_code(login, code):
         raise HTTPException(status_code=400, detail="Неверный или просроченный код")
 
@@ -405,11 +428,20 @@ def freeze_by_admin(login: str = Form(...), code: str = Form(...), db: Session =
     if user:
         user.subscription_expires_at = None
         db.commit()
-        log_admin_action("admin", "freeze", login)
+
+        login_hex = request.cookies.get("login")
+        admin_login = bytes.fromhex(login_hex).decode("utf-8") if login_hex else "неизвестен"
+        log_admin_action(admin_login, "freeze", login, db)
+
     return RedirectResponse(url="/view_users", status_code=303)
 
 @app.post("/admin/delete")
-def delete_by_admin(login: str = Form(...), code: str = Form(...), db: Session = Depends(get_db)):
+def delete_by_admin(
+    request: Request,
+    login: str = Form(...),
+    code: str = Form(...),
+    db: Session = Depends(get_db)
+):
     if not check_admin_code(login, code):
         raise HTTPException(status_code=400, detail="Неверный или просроченный код")
 
@@ -417,7 +449,11 @@ def delete_by_admin(login: str = Form(...), code: str = Form(...), db: Session =
     if user:
         db.delete(user)
         db.commit()
-        log_admin_action("admin", "delete", login)
+
+        login_hex = request.cookies.get("login")
+        admin_login = bytes.fromhex(login_hex).decode("utf-8") if login_hex else "неизвестен"
+        log_admin_action(admin_login, "delete", login, db)
+
     return RedirectResponse(url="/view_users", status_code=303)
 
 @app.get("/admin-confirm", response_class=HTMLResponse)
@@ -454,8 +490,3 @@ def confirm_admin_code(
     response = RedirectResponse(url="/dashboard", status_code=303)
     response.set_cookie(key="is_admin", value="True")
     return response
-
-
-
-
-

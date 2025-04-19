@@ -33,6 +33,16 @@ class User(Base):
 
     def decrypt_telegram_token(self):
         return fernet.decrypt(self.telegram_token_encrypted.encode()).decode()
+    
+class AdminLog(Base):
+    __tablename__ = "admin_log"
+
+    id = Column(Integer, primary_key=True, index=True)
+    admin_login = Column(String, nullable=False)
+    action = Column(String, nullable=False)
+    target_login = Column(String, nullable=False)
+    timestamp = Column(DateTime, default=datetime.utcnow)
+
 
 # Подключение к PostgreSQL
 DATABASE_URL = os.getenv("DATABASE_URL")

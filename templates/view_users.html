@@ -90,13 +90,13 @@
 
 <button class="button" onclick="toggleLog()">📋 Журнал действий</button>
 
-<div id="log-area" style="display:none; margin-top: 20px; background-color:#2a2a2a; padding:15px; border-radius:10px;">
+<<div id="log-area" style="display:none; margin-top: 20px; background-color:#2a2a2a; padding:15px; border-radius:10px;">
     <h2 style="color:#44c767;">🕓 Журнал действий администратора</h2>
     {% if log_entries %}
         <ul>
-            {% for line in log_entries %}
-                <li>{{ line }}</li>
-            {% endfor %}
+        {% for entry in log_entries %}
+            <li>[{{ entry.timestamp.strftime('%Y-%m-%d %H:%M:%S') }}] Администратор: {{ entry.admin_login }} | Действие: {{ entry.action }} | Пользователь: {{ entry.target_login }}</li>
+        {% endfor %}
         </ul>
     {% else %}
         <p>Лог пуст.</p>
@@ -199,7 +199,7 @@
             }
         });
     }
-    
+
     function toggleLog() {
     const area = document.getElementById("log-area");
     area.style.display = area.style.display === "none" ? "block" : "none";
