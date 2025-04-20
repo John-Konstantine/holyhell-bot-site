@@ -493,6 +493,14 @@ def show_admin_confirm_page(request: Request):
         }
     })
 
+@app.get("/payment-success", response_class=HTMLResponse)
+def payment_success(request: Request):
+    return templates.TemplateResponse("payment_success.html", {"request": request})
+
+
+@app.get("/payment-failed", response_class=HTMLResponse)
+def payment_failed(request: Request):
+    return templates.TemplateResponse("payment_failed.html", {"request": request})
 
 @app.post("/admin-confirm", response_class=HTMLResponse)
 def confirm_admin_code(
