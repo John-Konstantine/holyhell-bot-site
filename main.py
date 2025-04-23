@@ -273,11 +273,12 @@ async def create_invoice(login: str) -> str:
                 }
             )
             result = response.json()
-            if "url" in result:
-                return result["url"]
+            if result.get("status") == "success" and "link" in result["result"]:
+                return result["result"]["link"]
             else:
                 print("Ошибка при создании инвойса:", result)
                 return "/payment-failed"
+
     except Exception as e:
         print("Исключение при создании инвойса:", str(e))
         return "/payment-failed"
