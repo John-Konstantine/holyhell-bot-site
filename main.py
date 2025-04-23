@@ -270,7 +270,7 @@ async def create_invoice(login: str) -> str:
                     "amount": 30,
                     "currency": "USD",
                     "shop_id": CRYPTOCLOUD_PROJECT_ID,
-                    "custom_fields[login]": login
+                    "custom_fields": json.dumps({"login": login})
                 }
             )
             result = response.json()
@@ -542,8 +542,15 @@ async def payment_webhook(request: Request, db: Session = Depends(get_db)):
 
         if data.get("status") != "success":
             return {"ok": True}
+        
+        print("🌐 Все поля формы:", data)
+        try:
+            custom_fields = json.loads(data.get("custom_fields"))
+            login = custom_fields.get("login")
+        except Exception as e:
+            print("❌ Ошибка чтения custom_fields:", e)
+            return {"error": "Invalid custom_fields"}
 
-        login = data.get("custom_fields[login]")
         if not login:
             return {"error": "Логин не передан"}
 
