@@ -268,7 +268,7 @@ async def create_invoice(login: str) -> str:
                 data={
                     "amount": 30,
                     "currency": "USD",
-                    "project_id": CRYPTOCLOUD_PROJECT_ID,
+                    "shop_id": CRYPTOCLOUD_PROJECT_ID,
                     "custom_fields[login]": login
                 }
             )
