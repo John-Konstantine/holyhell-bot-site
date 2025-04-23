@@ -4,6 +4,7 @@ import time
 import requests
 import logging
 import httpx
+import json
 from pathlib import Path
 from datetime import datetime, timedelta
 from fastapi import FastAPI, Request, Form, Depends, HTTPException
@@ -535,7 +536,13 @@ def payment_failed(request: Request):
 @app.post("/webhook/payment")
 async def payment_webhook(request: Request, db: Session = Depends(get_db)):
     try:
-        data = await request.json()
+        data = await request.body()
+        try:
+            data = json.loads(data)
+        except Exception as e:
+            print("❌ Невалидный JSON:", data)
+            return {"error": "Invalid JSON"}
+
         print("Webhook получен:", data)
 
         # Проверка статуса оплаты
