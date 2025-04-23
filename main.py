@@ -536,20 +536,14 @@ def payment_failed(request: Request):
 @app.post("/webhook/payment")
 async def payment_webhook(request: Request, db: Session = Depends(get_db)):
     try:
-        data = await request.body()
-        try:
-            data = json.loads(data)
-        except Exception as e:
-            print("❌ Невалидный JSON:", data)
-            return {"error": "Invalid JSON"}
+        form = await request.form()
+        data = dict(form)
+        print("Webhook получен (FORM):", data)
 
-        print("Webhook получен:", data)
-
-        # Проверка статуса оплаты
         if data.get("status") != "success":
             return {"ok": True}
 
-        login = data.get("custom_fields", {}).get("login")
+        login = data.get("custom_fields[login]")
         if not login:
             return {"error": "Логин не передан"}
 
@@ -557,7 +551,6 @@ async def payment_webhook(request: Request, db: Session = Depends(get_db)):
         if not user:
             return {"error": "Пользователь не найден"}
 
-        # Продлеваем подписку
         if user.subscription_expires_at and user.subscription_expires_at > datetime.utcnow():
             user.subscription_expires_at += timedelta(days=30)
         else:
@@ -570,6 +563,7 @@ async def payment_webhook(request: Request, db: Session = Depends(get_db)):
     except Exception as e:
         print("Ошибка вебхука:", e)
         return {"error": str(e)}
+
 
 @app.get("/pay")
 async def redirect_to_payment(request: Request):
