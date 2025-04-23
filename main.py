@@ -10,6 +10,7 @@ from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from models import AdminLog
+from fastapi import Body
 
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
@@ -501,6 +502,53 @@ def payment_success(request: Request):
 @app.get("/payment-failed", response_class=HTMLResponse)
 def payment_failed(request: Request):
     return templates.TemplateResponse("payment_failed.html", {"request": request})
+
+@app.post("/webhook/payment")
+async def payment_webhook(request: Request, db: Session = Depends(get_db)):
+    try:
+        data = await request.json()
+        print("Webhook получен:", data)
+
+        # Проверка статуса оплаты
+        if data.get("status") != "success":
+            return {"ok": True}
+
+        login = data.get("custom_fields", {}).get("login")
+        if not login:
+            return {"error": "Логин не передан"}
+
+        user = db.query(User).filter(User.login == login).first()
+        if not user:
+            return {"error": "Пользователь не найден"}
+
+        # Продлеваем подписку
+        if user.subscription_expires_at and user.subscription_expires_at > datetime.utcnow():
+            user.subscription_expires_at += timedelta(days=30)
+        else:
+            user.subscription_expires_at = datetime.utcnow() + timedelta(days=30)
+
+        db.commit()
+
+        return {"ok": True}
+    except Exception as e:
+        print("Ошибка вебхука:", e)
+        return {"error": str(e)}
+
+@app.get("/pay")
+def redirect_to_payment(request: Request):
+    login_hex = request.cookies.get("login")
+    try:
+        login = bytes.fromhex(login_hex).decode('utf-8')
+    except:
+        login = None
+
+    if not login:
+        return RedirectResponse(url="/login")
+
+    # ВАЖНО: ВСТАВЬ СЮДА СВОЮ ССЫЛКУ ИЗ CryptoCloud!
+    crypto_url = f"https://pay.cryptocloud.plus/pos/A1BhwCXKDwWCIDZ3?custom_fields[login]={login}"
+
+    return RedirectResponse(url=crypto_url)
 
 @app.post("/admin-confirm", response_class=HTMLResponse)
 def confirm_admin_code(

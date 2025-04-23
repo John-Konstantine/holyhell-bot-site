@@ -193,9 +193,9 @@
             <p>Истекла: {{ subscription_expires }}</p>
         {% endif %}
 
-        <form method="post" action="/extend-subscription">
+        <form method="GET" action="/pay">
             <input type="hidden" name="login" value="{{ login }}">
-            <button type="submit">🔄 Продлить подписку на 30 дней</button>
+            <button type="submit" class="button">💳 Продлить подписку на 30 дней</button>
         </form>
 
         <hr>
