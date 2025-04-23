@@ -542,7 +542,7 @@ async def payment_webhook(request: Request, db: Session = Depends(get_db)):
         if data.get("status") != "success":
             return {"ok": True}
 
-        login = data.get("custom_fields", {}).get("login")
+        login = data.get("result", {}).get("custom_fields", {}).get("login")
         if not login:
             return {"error": "Логин не передан"}
 
@@ -557,6 +557,7 @@ async def payment_webhook(request: Request, db: Session = Depends(get_db)):
             user.subscription_expires_at = datetime.utcnow() + timedelta(days=30)
 
         db.commit()
+        print(f"✅ Подписка успешно продлена для пользователя: {login}")
 
         return {"ok": True}
     except Exception as e:
