@@ -254,7 +254,7 @@ def show_dashboard(request: Request, db: Session = Depends(get_db)):
         "subscription_expires": user.subscription_expires_at.strftime('%Y-%m-%d %H:%M:%S') if user.subscription_expires_at else "нет",
         "subscription_active": subscription_active
     })
-RYPTOCLOUD_API_KEY = "eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJ1dWlkIjoiTlRFME1EST0iLCJ0eXBlIjoicHJvamVjdCIsInYiOiI2ODllODcyMzA4MDQxMTEyZGM2ZjQzZTM2ZGEwMzVjMjFlMTA0M2E4NWY3ZThiMWI1YWNhMTRmNzUzYzk5ZGRjIiwiZXhwIjo4ODE0NTMwMjQ1Mn0.Cstegj5Y4rHCo9BTnKM_985Q06l5dziw6KDPHYsECHs"
+CRYPTOCLOUD_API_KEY = "eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJ1dWlkIjoiTlRFME1EST0iLCJ0eXBlIjoicHJvamVjdCIsInYiOiI2ODllODcyMzA4MDQxMTEyZGM2ZjQzZTM2ZGEwMzVjMjFlMTA0M2E4NWY3ZThiMWI1YWNhMTRmNzUzYzk5ZGRjIiwiZXhwIjo4ODE0NTMwMjQ1Mn0.Cstegj5Y4rHCo9BTnKM_985Q06l5dziw6KDPHYsECHs"
 CRYPTOCLOUD_PROJECT_ID = "A1BHwCXKDvWClDZ3"
 
 async def create_invoice(login: str) -> str:
