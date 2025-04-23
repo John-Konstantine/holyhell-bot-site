@@ -546,7 +546,7 @@ def redirect_to_payment(request: Request):
         return RedirectResponse(url="/login")
 
     # ВАЖНО: ВСТАВЬ СЮДА СВОЮ ССЫЛКУ ИЗ CryptoCloud!
-    crypto_url = f"https://pay.cryptocloud.plus/pos/A1BhwCXKDwWCIDZ3?custom_fields[login]={login}"
+    crypto_url = f"https://pay.cryptocloud.plus/pos/A1BhwCXKDwWCIDZ3?amount=30&currency=usd&custom_fields[login]={login}"
 
     return RedirectResponse(url=crypto_url)
 
