@@ -549,7 +549,7 @@ async def payment_webhook(request: Request, db: Session = Depends(get_db)):
         if data.get("status") != "success":
             return {"ok": True}
 
-        login = data.get("result", {}).get("custom_fields", {}).get("login")
+        login = data.get("custom_fields", {}).get("login")
         if not login:
             return {"error": "Логин не передан"}
 
