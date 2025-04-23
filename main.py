@@ -3,6 +3,7 @@ import random
 import time
 import requests
 import logging
+import httpx
 from pathlib import Path
 from datetime import datetime, timedelta
 from fastapi import FastAPI, Request, Form, Depends, HTTPException
@@ -253,7 +254,34 @@ def show_dashboard(request: Request, db: Session = Depends(get_db)):
         "subscription_expires": user.subscription_expires_at.strftime('%Y-%m-%d %H:%M:%S') if user.subscription_expires_at else "нет",
         "subscription_active": subscription_active
     })
+RYPTOCLOUD_API_KEY = "eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJ1dWlkIjoiTlRFME1EST0iLCJ0eXBlIjoicHJvamVjdCIsInYiOiI2ODllODcyMzA4MDQxMTEyZGM2ZjQzZTM2ZGEwMzVjMjFlMTA0M2E4NWY3ZThiMWI1YWNhMTRmNzUzYzk5ZGRjIiwiZXhwIjo4ODE0NTMwMjQ1Mn0.Cstegj5Y4rHCo9BTnKM_985Q06l5dziw6KDPHYsECHs"
+CRYPTOCLOUD_PROJECT_ID = "A1BHwCXKDvWClDZ3"
 
+async def create_invoice(login: str) -> str:
+    try:
+        async with httpx.AsyncClient() as client:
+            response = await client.post(
+                "https://api.cryptocloud.plus/v2/invoice/create",
+                headers={
+                    "Authorization": f"Token {CRYPTOCLOUD_API_KEY}",
+                },
+                data={
+                    "amount": 30,
+                    "currency": "USD",
+                    "project_id": CRYPTOCLOUD_PROJECT_ID,
+                    "custom_fields[login]": login
+                }
+            )
+            result = response.json()
+            if "url" in result:
+                return result["url"]
+            else:
+                print("Ошибка при создании инвойса:", result)
+                return "/payment-failed"
+    except Exception as e:
+        print("Исключение при создании инвойса:", str(e))
+        return "/payment-failed"
+    
 @app.post("/request-hwid-reset", response_class=HTMLResponse)
 def request_hwid_reset(
     request: Request,
@@ -535,20 +563,18 @@ async def payment_webhook(request: Request, db: Session = Depends(get_db)):
         return {"error": str(e)}
 
 @app.get("/pay")
-def redirect_to_payment(request: Request):
+async def redirect_to_payment(request: Request):
     login_hex = request.cookies.get("login")
     try:
-        login = bytes.fromhex(login_hex).decode('utf-8')
+        login = bytes.fromhex(login_hex).decode("utf-8")
     except:
         login = None
 
     if not login:
         return RedirectResponse(url="/login")
 
-    # ВАЖНО: ВСТАВЬ СЮДА СВОЮ ССЫЛКУ ИЗ CryptoCloud!
-    crypto_url = f"https://pay.cryptocloud.plus/pos/A1BhwCXKDwWCIDZ3?amount=30&currency=usd&custom_fields[login]={login}"
-
-    return RedirectResponse(url=crypto_url)
+    invoice_url = await create_invoice(login)
+    return RedirectResponse(url=invoice_url)
 
 @app.post("/admin-confirm", response_class=HTMLResponse)
 def confirm_admin_code(
