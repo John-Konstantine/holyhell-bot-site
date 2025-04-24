@@ -23,12 +23,10 @@ class User(Base):
     id = Column(Integer, primary_key=True, index=True)
     login = Column(String, unique=True, nullable=False)
     password_hash = Column(String, nullable=False)
-    api_key = Column(String, nullable=False)
-    api_secret_encrypted = Column(String, nullable=False)
+    api_key = Column(String, nullable=False)  # Здесь ключ Binance
+    api_secret_encrypted = Column(String, nullable=False)  # Здесь зашифрованный ключ Binance
     telegram_id = Column(String, nullable=False)
     telegram_token_encrypted = Column(String, nullable=False)
-    binance_api_key = Column(String, nullable=True)  # Новое поле
-    binance_api_secret = Column(String, nullable=True)  # Новое поле
     hwid = Column(String, nullable=True)
     subscription_expires_at = Column(DateTime, nullable=True)
 

@@ -133,10 +133,10 @@
         <div class="label">Логин:</div>
         <div class="value">{{ login }}</div>
 
-        <div class="label">API Key:</div>
+        <div class="label">Binance API Key:</div>
         <div class="value">{{ api_key }}</div>
 
-        <div class="label">API Secret:</div>
+        <div class="label">Binance API Secret:</div>
         <div class="value">{{ api_secret }}</div>
 
         <div class="label">Telegram ID:</div>
@@ -144,12 +144,6 @@
 
         <div class="label">Telegram Token:</div>
         <div class="value">{{ telegram_token }}</div>
-
-        <div class="label">Binance API Key:</div>
-        <div class="value">{{ binance_api_key }}</div>
-
-        <div class="label">Binance API Secret:</div>
-        <div class="value">{{ binance_api_secret }}</div>
 
         <!-- Проверка на админа и отображение кнопки -->
         {% if request.cookies['is_admin'] == 'True' %}
