@@ -19,7 +19,11 @@ from models import User, SessionLocal, fernet, AdminLog, Base, Payment  # Доб
 from dotenv import load_dotenv
 
 # Настройка логирования
-logging.basicConfig(filename="app.log", level=logging.INFO)
+logging.basicConfig(
+    filename="app.log",
+    level=logging.INFO,
+    format='%(asctime)s - %(levelname)s - %(message)s'
+)
 
 load_dotenv()
 
@@ -63,6 +67,9 @@ def log_admin_action(admin_login: str, action: str, target_login: str, db: Sessi
     action_str = messages.get(action, action)
     timestamp = datetime.now()
 
+    # Логируем действие администратора
+    logging.info(f"Админ {admin_login} выполнил действие '{action_str}' для {target_login}")
+
     # Сохраняем в базу
     db.add(AdminLog(
         admin_login=admin_login,
@@ -79,22 +86,28 @@ def log_admin_action(admin_login: str, action: str, target_login: str, db: Sessi
 
 def check_admin_code(login: str, code: str):
     if login not in pending_admin_actions:
+        logging.error(f"Проверка кода для {login} невозможна: запись отсутствует в pending_admin_actions")
         return False
     expected = pending_admin_actions[login]
     if expected["code"] != code:
+        logging.error(f"Неверный код для {login}: ожидался {expected['code']}, получен {code}")
         return False
     if time.time() - expected["timestamp"] > 300:
+        logging.error(f"Код для {login} просрочен")
         return False
+    logging.info(f"Код для {login} успешно проверен")
     return True
 
 @app.get("/", response_class=HTMLResponse)
 def index(request: Request):
+    logging.info("Открыта главная страница")
     return templates.TemplateResponse("index.html", {"request": request})
 
 # --------------------------- РЕГИСТРАЦИЯ ---------------------------
 
 @app.get("/register", response_class=HTMLResponse)
 def show_register_form(request: Request):
+    logging.info("Открыта форма регистрации")
     return templates.TemplateResponse("register.html", {"request": request})
 
 @app.post("/register", response_class=HTMLResponse)
@@ -108,7 +121,9 @@ async def register_user_form(
     telegram_token: str = Form(...),
     db: Session = Depends(get_db)
 ):
+    logging.info(f"Попытка регистрации пользователя {login}")
     if db.query(User).filter(User.login == login).first():
+        logging.error(f"Регистрация отклонена: логин {login} уже существует")
         return templates.TemplateResponse("register.html", {
             "request": request,
             "error": "Пользователь с таким логином уже существует"
@@ -130,12 +145,14 @@ async def register_user_form(
 
     db.add(new_user)
     db.commit()
+    logging.info(f"Пользователь {login} успешно зарегистрирован")
     return RedirectResponse(url="/login", status_code=303)
 
 # --------------------------- HTML-ФОРМА ВХОДА (БЕЗ HWID) ---------------------------
 
 @app.get("/login", response_class=HTMLResponse)
 def show_login_form(request: Request):
+    logging.info("Открыта форма входа")
     return templates.TemplateResponse("login.html", {"request": request})
 
 @app.post("/login", response_class=HTMLResponse)
@@ -145,14 +162,18 @@ def login_user_form(
     password: str = Form(...),
     db: Session = Depends(get_db)
 ):
+    logging.info(f"Попытка входа для {login}")
     user = db.query(User).filter(User.login == login).first()
     if not user:
+        logging.error(f"Вход отклонён: пользователь {login} не найден")
         return templates.TemplateResponse("login.html", {"request": request, "error": "Пользователь не найден"})
 
     if not bcrypt.verify(password, user.password_hash):
+        logging.error(f"Вход отклонён: неверный пароль для {login}")
         return templates.TemplateResponse("login.html", {"request": request, "error": "Неверный пароль"})
 
     is_admin = user.telegram_id == "6393934084"  # Укажи свой Telegram ID
+    logging.info(f"Пользователь {login} аутентифицирован, is_admin={is_admin}")
 
     response = RedirectResponse(url="/dashboard", status_code=303)
     response.set_cookie(
@@ -166,12 +187,14 @@ def login_user_form(
     if is_admin:
         code = f"{random.randint(100000, 999999)}"
         pending_admin_actions[login] = {"code": code, "timestamp": time.time()}
+        logging.info(f"Сгенерирован код администратора для {login}: {code}")
 
         try:
             url = f"https://api.telegram.org/bot{user.decrypt_telegram_token()}/sendMessage"
             requests.post(url, data={"chat_id": user.telegram_id, "text": f"Код подтверждения входа администратора: {code}"})
+            logging.info(f"Код отправлен в Telegram для {login}")
         except Exception as e:
-            logging.error(f"Ошибка Telegram: {e}")
+            logging.error(f"Ошибка отправки кода в Telegram для {login}: {e}")
 
         response = RedirectResponse(url="/admin-confirm", status_code=303)
         response.set_cookie(
@@ -207,20 +230,25 @@ class LoginResponse(BaseModel):
 
 @app.post("/api/login", response_model=LoginResponse)
 def login_via_app(request: LoginRequest, db: Session = Depends(get_db)):
-    logging.info(f"API login: {request.login}, HWID: {request.hwid}")
+    logging.info(f"API вход: {request.login}, HWID: {request.hwid}")
     user = db.query(User).filter(User.login == request.login).first()
     if not user:
+        logging.error(f"API вход отклонён: пользователь {request.login} не найден")
         raise HTTPException(status_code=404, detail="Пользователь не найден")
 
     if not bcrypt.verify(request.password, user.password_hash):
+        logging.error(f"API вход отклонён: неверный пароль для {request.login}")
         raise HTTPException(status_code=401, detail="Неверный пароль")
 
     if not user.hwid:
         user.hwid = request.hwid
         db.commit()
+        logging.info(f"HWID для {request.login} установлен: {request.hwid}")
     elif user.hwid != request.hwid:
+        logging.error(f"API вход отклонён: HWID не совпадает для {request.login}, ожидался {user.hwid}, получен {request.hwid}")
         raise HTTPException(status_code=403, detail="Доступ с другого устройства запрещён")
 
+    logging.info(f"API вход успешен для {request.login}")
     return LoginResponse(
         api_key=user.api_key,
         api_secret=user.decrypt_api_secret(),
@@ -235,17 +263,21 @@ def show_dashboard(request: Request, db: Session = Depends(get_db)):
     login_hex = request.cookies.get("login")
     try:
         login = bytes.fromhex(login_hex).decode('utf-8') if login_hex else None
-    except:
+    except Exception as e:
+        logging.error(f"Ошибка декодирования login из cookies: {e}")
         login = None
 
     if not login:
+        logging.info("Перенаправление на страницу входа: логин отсутствует")
         return RedirectResponse(url="/login")
 
     user = db.query(User).filter(User.login == login).first()
     if not user:
+        logging.error(f"Перенаправление на страницу входа: пользователь {login} не найден")
         return RedirectResponse(url="/login")
 
     subscription_active = user.subscription_expires_at and user.subscription_expires_at > datetime.utcnow()
+    logging.info(f"Открыт дашборд для {login}, подписка активна: {subscription_active}")
 
     return templates.TemplateResponse("dashboard.html", {
         "request": request,
@@ -259,6 +291,7 @@ def show_dashboard(request: Request, db: Session = Depends(get_db)):
     })
 
 async def create_invoice(login: str) -> str:
+    logging.info(f"Создание инвойса для {login}")
     try:
         async with httpx.AsyncClient() as client:
             response = await client.post(
@@ -276,12 +309,13 @@ async def create_invoice(login: str) -> str:
             result_data = result.get("result") or {}
             link = result_data.get("link")
             if result.get("status") == "success" and link:
+                logging.info(f"Инвойс успешно создан для {login}, ссылка: {link}")
                 return link
             else:
-                logging.error(f"Ошибка при создании инвойса: {json.dumps(result, indent=2, ensure_ascii=False)}")
+                logging.error(f"Ошибка при создании инвойса для {login}: {json.dumps(result, indent=2, ensure_ascii=False)}")
                 return "/payment-failed"
     except Exception as e:
-        logging.error(f"Исключение при создании инвойса: {str(e)}")
+        logging.error(f"Исключение при создании инвойса для {login}: {str(e)}")
         return "/payment-failed"
 
 @app.post("/request-hwid-reset", response_class=HTMLResponse)
@@ -290,8 +324,10 @@ def request_hwid_reset(
     login: str = Form(...),
     db: Session = Depends(get_db)
 ):
+    logging.info(f"Запрос сброса HWID для {login}")
     user = db.query(User).filter(User.login == login).first()
     if not user:
+        logging.error(f"Сброс HWID отклонён: пользователь {login} не найден")
         return templates.TemplateResponse("dashboard.html", {
             "request": request,
             "login": login,
@@ -300,13 +336,15 @@ def request_hwid_reset(
 
     code = f"{random.randint(100000, 999999)}"
     pending_hwid_resets[login] = {"code": code, "timestamp": time.time()}
+    logging.info(f"Сгенерирован код сброса HWID для {login}: {code}")
 
     try:
         url = f"https://api.telegram.org/bot{user.decrypt_telegram_token()}/sendMessage"
         data = {"chat_id": user.telegram_id, "text": f"Код для сброса HWID: {code}"}
         requests.post(url, data=data)
+        logging.info(f"Код сброса HWID отправлен в Telegram для {login}")
     except Exception as e:
-        logging.error(f"Ошибка отправки в Telegram: {e}")
+        logging.error(f"Ошибка отправки кода в Telegram для {login}: {e}")
         return templates.TemplateResponse("dashboard.html", {
             "request": request,
             "login": login,
@@ -330,8 +368,10 @@ def confirm_hwid_reset(
     code: str = Form(...),
     db: Session = Depends(get_db)
 ):
+    logging.info(f"Подтверждение сброса HWID для {login}, код: {code}")
     expected = pending_hwid_resets.get(login)
     if not expected or expected["code"] != code or time.time() - expected["timestamp"] > 300:
+        logging.error(f"Сброс HWID отклонён для {login}: неверный или просроченный код")
         return templates.TemplateResponse("dashboard.html", {
             "request": request,
             "login": login,
@@ -340,6 +380,7 @@ def confirm_hwid_reset(
 
     user = db.query(User).filter(User.login == login).first()
     if not user:
+        logging.error(f"Сброс HWID отклонён: пользователь {login} не найден")
         return templates.TemplateResponse("dashboard.html", {
             "request": request,
             "login": login,
@@ -349,6 +390,7 @@ def confirm_hwid_reset(
     user.hwid = None
     db.commit()
     pending_hwid_resets.pop(login, None)
+    logging.info(f"HWID успешно сброшено для {login}")
 
     subscription_active = user.subscription_expires_at and user.subscription_expires_at > datetime.utcnow()
 
@@ -366,14 +408,17 @@ def confirm_hwid_reset(
 
 @app.post("/logout")
 def logout():
+    logging.info("Пользователь выполнил выход")
     response = RedirectResponse(url="/login", status_code=303)
     response.delete_cookie("login")
     return response
 
 @app.post("/extend-subscription")
 def extend_subscription(request: Request, login: str = Form(...), db: Session = Depends(get_db)):
+    logging.info(f"Продление подписки для {login}")
     user = db.query(User).filter(User.login == login).first()
     if not user:
+        logging.error(f"Продление подписки отклонено: пользователь {login} не найден")
         raise HTTPException(status_code=404, detail="Пользователь не найден")
 
     if user.subscription_expires_at and user.subscription_expires_at > datetime.utcnow():
@@ -382,6 +427,7 @@ def extend_subscription(request: Request, login: str = Form(...), db: Session = 
         user.subscription_expires_at = datetime.utcnow() + timedelta(days=30)
 
     db.commit()
+    logging.info(f"Подписка продлена для {login} до {user.subscription_expires_at}")
 
     return RedirectResponse(url="/dashboard", status_code=303)
 
@@ -389,14 +435,15 @@ from fastapi.responses import JSONResponse
 
 @app.get("/debug/users")
 def debug_users(db: Session = Depends(get_db)):
+    logging.info("Запрос списка пользователей для отладки")
     users = db.query(User).all()
     return JSONResponse(content=[{"id": u.id, "login": u.login} for u in users])
 
 @app.get("/view_users", response_class=HTMLResponse)
 def view_users(request: Request, db: Session = Depends(get_db)):
+    logging.info("Открыта страница просмотра пользователей")
     users = db.query(User).all()
     log_entries = db.query(AdminLog).order_by(AdminLog.timestamp.desc()).limit(100).all()
-
     return templates.TemplateResponse("view_users.html", {
         "request": request,
         "users": users,
@@ -412,15 +459,19 @@ def send_admin_code(
     login_hex = request.cookies.get("login")
     try:
         admin_login = bytes.fromhex(login_hex).decode("utf-8") if login_hex else None
-    except:
+    except Exception as e:
+        logging.error(f"Ошибка декодирования admin_login из cookies: {e}")
         admin_login = None
 
+    logging.info(f"Запрос кода администратора для {login} от {admin_login}")
     admin = db.query(User).filter(User.login == admin_login).first()
     if not admin:
+        logging.error(f"Запрос кода отклонён: админ {admin_login} не найден")
         raise HTTPException(status_code=403, detail="Нет доступа")
 
     code = f"{random.randint(100000, 999999)}"
     pending_admin_actions[login] = {"code": code, "timestamp": time.time()}
+    logging.info(f"Сгенерирован код для {login}: {code}")
 
     try:
         token = admin.decrypt_telegram_token()
@@ -428,8 +479,9 @@ def send_admin_code(
         url = f"https://api.telegram.org/bot{token}/sendMessage"
         text = f"Код подтверждения: {code}"
         requests.post(url, data={"chat_id": chat_id, "text": text})
+        logging.info(f"Код отправлен в Telegram для {admin_login}")
     except Exception as e:
-        logging.error(f"Ошибка Telegram: {e}")
+        logging.error(f"Ошибка Telegram для {admin_login}: {e}")
         raise HTTPException(status_code=500, detail=f"Ошибка Telegram: {e}")
 
     return RedirectResponse(url="/view_users", status_code=303)
@@ -441,7 +493,9 @@ def extend_by_admin(
     code: str = Form(...),
     db: Session = Depends(get_db)
 ):
+    logging.info(f"Продление подписки админом для {login}, код: {code}")
     if not check_admin_code(login, code):
+        logging.error(f"Продление отклонено для {login}: неверный или просроченный код")
         raise HTTPException(status_code=400, detail="Неверный или просроченный код")
 
     user = db.query(User).filter(User.login == login).first()
@@ -451,6 +505,7 @@ def extend_by_admin(
         else:
             user.subscription_expires_at = datetime.utcnow() + timedelta(days=30)
         db.commit()
+        logging.info(f"Подписка продлена админом для {login} до {user.subscription_expires_at}")
 
         login_hex = request.cookies.get("login")
         admin_login = bytes.fromhex(login_hex).decode("utf-8") if login_hex else "неизвестен"
@@ -465,13 +520,16 @@ def freeze_by_admin(
     code: str = Form(...),
     db: Session = Depends(get_db)
 ):
+    logging.info(f"Заморозка подписки админом для {login}, код: {code}")
     if not check_admin_code(login, code):
+        logging.error(f"Заморозка отклонена для {login}: неверный или просроченный код")
         raise HTTPException(status_code=400, detail="Неверный или просроченный код")
 
     user = db.query(User).filter(User.login == login).first()
     if user:
         user.subscription_expires_at = None
         db.commit()
+        logging.info(f"Подписка заморожена для {login}")
 
         login_hex = request.cookies.get("login")
         admin_login = bytes.fromhex(login_hex).decode("utf-8") if login_hex else "неизвестен"
@@ -486,13 +544,16 @@ def delete_by_admin(
     code: str = Form(...),
     db: Session = Depends(get_db)
 ):
+    logging.info(f"Удаление пользователя админом для {login}, код: {code}")
     if not check_admin_code(login, code):
+        logging.error(f"Удаление отклонено для {login}: неверный или просроченный код")
         raise HTTPException(status_code=400, detail="Неверный или просроченный код")
 
     user = db.query(User).filter(User.login == login).first()
     if user:
         db.delete(user)
         db.commit()
+        logging.info(f"Пользователь {login} удалён админом")
 
         login_hex = request.cookies.get("login")
         admin_login = bytes.fromhex(login_hex).decode("utf-8") if login_hex else "неизвестен"
@@ -505,9 +566,11 @@ def show_admin_confirm_page(request: Request):
     login_hex = request.cookies.get("login")
     try:
         login = bytes.fromhex(login_hex).decode("utf-8") if login_hex else None
-    except:
+    except Exception as e:
+        logging.error(f"Ошибка декодирования login из cookies: {e}")
         login = None
 
+    logging.info(f"Открыта страница подтверждения админа для {login}")
     code_data = pending_admin_actions.get(login)
     if code_data:
         remaining = max(0, int(300 - (time.time() - code_data["timestamp"])))
@@ -524,10 +587,12 @@ def show_admin_confirm_page(request: Request):
 
 @app.get("/payment-success", response_class=HTMLResponse)
 def payment_success(request: Request):
+    logging.info("Открыта страница успешного платежа")
     return templates.TemplateResponse("payment_success.html", {"request": request})
 
 @app.get("/payment-failed", response_class=HTMLResponse)
 def payment_failed(request: Request):
+    logging.info("Открыта страница неудачного платежа")
     return templates.TemplateResponse("payment_failed.html", {"request": request})
 
 @app.post("/webhook/payment")
@@ -535,7 +600,7 @@ async def payment_webhook(request: Request, db: Session = Depends(get_db)):
     try:
         form = await request.form()
         data = dict(form)
-        logging.info(f"Webhook получен: {data}")
+        logging.info(f"Webhook получен: {json.dumps(data, ensure_ascii=False)}")
 
         if data.get("status") != "success":
             logging.info("Платёж не успешен, пропускаем")
@@ -543,7 +608,7 @@ async def payment_webhook(request: Request, db: Session = Depends(get_db)):
 
         invoice_id = data.get("invoice_id")
         if not invoice_id:
-            logging.error("invoice_id отсутствует")
+            logging.error("invoice_id отсутствует в вебхуке")
             return {"error": "invoice_id отсутствует"}
 
         # Проверка идемпотентности
@@ -557,23 +622,25 @@ async def payment_webhook(request: Request, db: Session = Depends(get_db)):
             try:
                 custom_fields = data["custom_fields"]
                 login = json.loads(custom_fields)["login"] if isinstance(custom_fields, str) else custom_fields["login"]
+                logging.info(f"Логин извлечён из custom_fields: {login}")
             except (ValueError, KeyError) as e:
-                logging.error(f"Ошибка custom_fields: {e}")
+                logging.error(f"Ошибка парсинга custom_fields: {e}")
                 return {"error": f"Ошибка custom_fields: {e}"}
         else:
             logging.error("custom_fields отсутствует в вебхуке")
             return {"error": "custom_fields отсутствует"}
 
         if not login:
-            logging.error("Логин не передан")
+            logging.error("Логин не передан в вебхуке")
             return {"error": "Логин не передан"}
 
         user = db.query(User).filter(User.login == login).first()
         if not user:
-            logging.error(f"Пользователь {login} не найден")
+            logging.error(f"Пользователь {login} не найден для обработки вебхука")
             return {"error": "Пользователь не найден"}
 
         # Продление подписки
+        old_expiry = user.subscription_expires_at
         if user.subscription_expires_at and user.subscription_expires_at > datetime.utcnow():
             user.subscription_expires_at += timedelta(days=30)
         else:
@@ -588,15 +655,15 @@ async def payment_webhook(request: Request, db: Session = Depends(get_db)):
         )
         db.add(payment)
         db.commit()
-        logging.info(f"Подписка продлена для {login}, платёж {invoice_id} сохранён")
+        logging.info(f"Подписка продлена для {login} с {old_expiry} до {user.subscription_expires_at}, платёж {invoice_id} сохранён")
 
         return {"ok": True}
     except SQLAlchemyError as e:
         db.rollback()
-        logging.error(f"Ошибка базы данных: {e}")
+        logging.error(f"Ошибка базы данных в вебхуке: {e}")
         return {"error": f"Ошибка базы данных: {e}"}
     except Exception as e:
-        logging.error(f"Ошибка вебхука: {e}")
+        logging.error(f"Общая ошибка вебхука: {e}")
         return {"error": str(e)}
 
 @app.get("/pay")
@@ -604,14 +671,18 @@ async def redirect_to_payment(request: Request):
     login_hex = request.cookies.get("login")
     try:
         login = bytes.fromhex(login_hex).decode("utf-8")
-    except:
+    except Exception as e:
+        logging.error(f"Ошибка декодирования login из cookies для оплаты: {e}")
         login = None
 
     if not login:
+        logging.info("Перенаправление на вход: логин отсутствует")
         return RedirectResponse(url="/login")
 
+    logging.info(f"Перенаправление на оплату для {login}")
     invoice_url = await create_invoice(login)
     if invoice_url == "/payment-failed":
+        logging.error(f"Не удалось создать инвойс для {login}")
         return templates.TemplateResponse("payment_failed.html", {"request": request, "error": "Не удалось создать инвойс"})
     return RedirectResponse(url=invoice_url)
 
@@ -624,10 +695,13 @@ def confirm_admin_code(
     login_hex = request.cookies.get("login")
     try:
         login = bytes.fromhex(login_hex).decode('utf-8') if login_hex else None
-    except:
+    except Exception as e:
+        logging.error(f"Ошибка декодирования login из cookies: {e}")
         login = None
 
+    logging.info(f"Подтверждение кода админа для {login}, код: {code}")
     if not login or login not in pending_admin_actions:
+        logging.error(f"Подтверждение отклонено для {login}: доступ запрещён или код не запрашивался")
         return templates.TemplateResponse("admin_confirm.html", {
             "request": request,
             "error": "Доступ запрещён или код не запрашивался",
@@ -639,6 +713,7 @@ def confirm_admin_code(
     expected = pending_admin_actions.get(login)
     if expected["code"] != code or time.time() - expected["timestamp"] > 300:
         remaining = max(0, int(300 - (time.time() - expected["timestamp"])))
+        logging.error(f"Подтверждение отклонено для {login}: неверный или просроченный код")
         return templates.TemplateResponse("admin_confirm.html", {
             "request": request,
             "error": "Неверный или просроченный код",
@@ -647,6 +722,7 @@ def confirm_admin_code(
             }
         })
 
+    logging.info(f"Код админа подтверждён для {login}")
     response = RedirectResponse(url="/dashboard", status_code=303)
     response.set_cookie(key="is_admin", value="True", httponly=True, secure=True, samesite="strict")
     return response
