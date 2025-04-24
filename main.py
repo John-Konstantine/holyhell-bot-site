@@ -525,27 +525,27 @@ def extend_by_admin(
 
     return RedirectResponse(url="/view_users", status_code=303)
 
-@app.post("/admin/freeze")
-def freeze_by_admin(
+@app.post("/admin/remove-subscription")
+def remove_subscription_by_admin(
     request: Request,
     login: str = Form(...),
     code: str = Form(...),
     db: Session = Depends(get_db)
 ):
-    logging.info(f"Заморозка подписки админом для {login}, код: {code}")
+    logging.info(f"Удаление подписки админом для {login}, код: {code}")
     if not check_admin_code(login, code):
-        logging.error(f"Заморозка отклонена для {login}: неверный или просроченный код")
+        logging.error(f"Удаление подписки отклонено для {login}: неверный или просроченный код")
         raise HTTPException(status_code=400, detail="Неверный или просроченный код")
 
     user = db.query(User).filter(User.login == login).first()
     if user:
         user.subscription_expires_at = None
         db.commit()
-        logging.info(f"Подписка заморожена для {login}")
+        logging.info(f"Подписка удалена для {login}")
 
         login_hex = request.cookies.get("login")
         admin_login = bytes.fromhex(login_hex).decode("utf-8") if login_hex else "неизвестен"
-        log_admin_action(admin_login, "freeze", login, db)
+        log_admin_action(admin_login, "remove_subscription", login, db)
 
     return RedirectResponse(url="/view_users", status_code=303)
 
