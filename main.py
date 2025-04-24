@@ -246,6 +246,11 @@ def login_via_app(request: LoginRequest, db: Session = Depends(get_db)):
         logging.error(f"API вход отклонён: неверный пароль для {request.login}")
         raise HTTPException(status_code=401, detail="Неверный пароль")
 
+    # Проверка подписки
+    if not user.subscription_expires_at or user.subscription_expires_at < datetime.utcnow():
+        logging.error(f"API вход отклонён: подписка для {request.login} неактивна")
+        raise HTTPException(status_code=403, detail="Подписка неактивна или истекла")
+
     if not user.hwid:
         user.hwid = request.hwid
         db.commit()

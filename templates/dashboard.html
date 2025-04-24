@@ -190,7 +190,7 @@
             <p>Истекает: {{ subscription_expires }}</p>
         {% else %}
             <p class="error">Подписка истекла ❌</p>
-            <p>Истекла: {{ subscription_expires }}</p>
+            <p>Истекла: {{ subscription_expires if subscription_expires != 'нет' else 'Нет' }}</p>
         {% endif %}
 
         <form method="GET" action="/pay">
@@ -216,6 +216,7 @@
             return `${days}д ${hours}ч ${minutes}мин. ${seconds}сек.`;
         }
 
+        {% if subscription_active and subscription_expires != 'нет' %}
         const expiry = new Date("{{ subscription_expires }}").getTime();
 
         function updateTimer() {
@@ -232,6 +233,9 @@
 
         updateTimer();
         const interval = setInterval(updateTimer, 1000);
+        {% else %}
+        document.getElementById("timer").innerText = "Подписка истекла ❌";
+        {% endif %}
     </script>
 </body>
 </html>
