@@ -267,8 +267,9 @@ async def create_invoice(login: str) -> str:
                 json={
                     "amount": 30,
                     "currency": "USD",
-                    "shop_id": CRYPTOCLOUD_PROJECT_ID,
-                    "custom_fields": { "login": login }  # передача login в nested JSON
+                    "project_id": CRYPTOCLOUD_PROJECT_ID,
+                    "custom_fields": { "login": login }
+
                 }
             )
 
