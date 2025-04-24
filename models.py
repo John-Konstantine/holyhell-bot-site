@@ -27,6 +27,8 @@ class User(Base):
     api_secret_encrypted = Column(String, nullable=False)
     telegram_id = Column(String, nullable=False)
     telegram_token_encrypted = Column(String, nullable=False)
+    binance_api_key = Column(String, nullable=True)  # Новое поле
+    binance_api_secret = Column(String, nullable=True)  # Новое поле
     hwid = Column(String, nullable=True)
     subscription_expires_at = Column(DateTime, nullable=True)
 

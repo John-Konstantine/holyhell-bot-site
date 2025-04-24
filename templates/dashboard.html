@@ -145,6 +145,12 @@
         <div class="label">Telegram Token:</div>
         <div class="value">{{ telegram_token }}</div>
 
+        <div class="label">Binance API Key:</div>
+        <div class="value">{{ binance_api_key }}</div>
+
+        <div class="label">Binance API Secret:</div>
+        <div class="value">{{ binance_api_secret }}</div>
+
         <!-- Проверка на админа и отображение кнопки -->
         {% if request.cookies['is_admin'] == 'True' %}
             <a href="/view_users"><button>Просмотр пользователей</button></a>

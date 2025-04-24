@@ -125,6 +125,8 @@ async def register_user_form(
     api_secret: str = Form(...),
     telegram_id: str = Form(...),
     telegram_token: str = Form(...),
+    binance_api_key: str = Form(...),
+    binance_api_secret: str = Form(...),
     db: Session = Depends(get_db)
 ):
     logging.info(f"Попытка регистрации пользователя {login}")
@@ -146,6 +148,8 @@ async def register_user_form(
         api_secret_encrypted=encrypted_secret,
         telegram_id=telegram_id,
         telegram_token_encrypted=encrypted_token,
+        binance_api_key=binance_api_key,
+        binance_api_secret=binance_api_secret,
         subscription_expires_at=datetime.utcnow() + timedelta(days=30)
     )
 
@@ -233,6 +237,8 @@ class LoginResponse(BaseModel):
     api_secret: str
     telegram_id: str
     telegram_token: str
+    binance_api_key: str
+    binance_api_secret: str
 
 @app.post("/api/login", response_model=LoginResponse)
 def login_via_app(request: LoginRequest, db: Session = Depends(get_db)):
@@ -264,7 +270,9 @@ def login_via_app(request: LoginRequest, db: Session = Depends(get_db)):
         api_key=user.api_key,
         api_secret=user.decrypt_api_secret(),
         telegram_id=user.telegram_id,
-        telegram_token=user.decrypt_telegram_token()
+        telegram_token=user.decrypt_telegram_token(),
+        binance_api_key=user.binance_api_key,
+        binance_api_secret=user.binance_api_secret
     )
 
 # --------------------------- DASHBOARD и HWID RESET ---------------------------
