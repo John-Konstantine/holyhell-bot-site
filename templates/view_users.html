@@ -124,9 +124,21 @@
             <td>{{ user.login }}</td>
             <td>{{ user.telegram_id }}</td>
             <td>{{ user.hwid if user.hwid else "Не установлен" }}</td>
-            <td>{{ user.subscription_expires_at.strftime('%Y-%m-%d') }}</td>
+            <td>
+                {% if user.subscription_expires_at %}
+                    {{ user.subscription_expires_at.strftime('%Y-%m-%d') }}
+                {% else %}
+                    Нет
+                {% endif %}
+            </td>
             <td><span id="timer-{{ user.id }}">Загрузка...</span></td>
-            <td>{{ user.subscription_expires_at.strftime('%Y-%m-%d %H:%M:%S') }}</td>
+            <td>
+                {% if user.subscription_expires_at %}
+                    {{ user.subscription_expires_at.strftime('%Y-%m-%d %H:%M:%S') }}
+                {% else %}
+                    Нет
+                {% endif %}
+            </td>
             <td>
                 <button class="button" onclick="startAction('{{ user.login }}', 'extend')">🔁</button>
             </td>
@@ -162,8 +174,9 @@
 
     {% for user in users %}
     (function() {
-        const expiry = new Date("{{ user.subscription_expires_at.isoformat() }}").getTime();
         const timerEl = document.getElementById("timer-{{ user.id }}");
+        {% if user.subscription_expires_at %}
+        const expiry = new Date("{{ user.subscription_expires_at.isoformat() }}").getTime();
         function update() {
             const now = new Date().getTime();
             const diff = expiry - now;
@@ -177,6 +190,10 @@
         }
         update();
         setInterval(update, 1000);
+        {% else %}
+        timerEl.innerText = "Нет";
+        timerEl.className = "expired";
+        {% endif %}
     })();
     {% endfor %}
 
