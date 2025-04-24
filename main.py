@@ -267,17 +267,22 @@ async def create_invoice(login: str) -> str:
                 json={
                     "amount": 30,
                     "currency": "USD",
-                    "project_id": CRYPTOCLOUD_PROJECT_ID,
+                    "shop_id": CRYPTOCLOUD_PROJECT_ID,
                     "custom_fields": { "login": login }
 
                 }
             )
 
             result = response.json()
-            if result.get("status") == "success" and "link" in result["result"]:
-                return result["result"]["link"]
+            print("📦 Ответ от CryptoCloud:", json.dumps(result, indent=2, ensure_ascii=False))
+
+            result_data = result.get("result") or {}
+            link = result_data.get("link")
+
+            if result.get("status") == "success" and link:
+                return link
             else:
-                print("Ошибка при создании инвойса:", result)
+                print("❌ Ошибка при создании инвойса:", json.dumps(result, indent=2, ensure_ascii=False))
                 return "/payment-failed"
 
     except Exception as e:
