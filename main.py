@@ -11,17 +11,17 @@ from fastapi import FastAPI, Request, Form, Depends, HTTPException
 from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
-from models import AdminLog
-from fastapi import Body
-
-from pydantic import BaseModel
 from sqlalchemy.orm import Session
+from sqlalchemy.exc import SQLAlchemyError
 from passlib.hash import bcrypt
-
-from models import User, SessionLocal, fernet
+from pydantic import BaseModel
+from models import User, SessionLocal, fernet, AdminLog, Base, Payment  # Добавьте Payment
 from dotenv import load_dotenv
-load_dotenv()
 
+# Настройка логирования
+logging.basicConfig(filename="app.log", level=logging.INFO)
+
+load_dotenv()
 
 app = FastAPI(
     title="Сайт торгового бота",
@@ -30,11 +30,14 @@ app = FastAPI(
     debug=True
 )
 
-
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 app.mount("/static", StaticFiles(directory=os.path.join(BASE_DIR, "static")), name="static")
 app.mount("/downloads", StaticFiles(directory=os.path.join(BASE_DIR, "downloads")), name="downloads")
 templates = Jinja2Templates(directory=os.path.join(BASE_DIR, "templates"))
+
+# Загрузка секретов из .env
+CRYPTOCLOUD_API_KEY = os.getenv("CRYPTOCLOUD_API_KEY")
+CRYPTOCLOUD_PROJECT_ID = os.getenv("CRYPTOCLOUD_PROJECT_ID")
 
 def get_db():
     db = SessionLocal()
@@ -74,7 +77,6 @@ def log_admin_action(admin_login: str, action: str, target_login: str, db: Sessi
     with open(LOG_FILE, "a", encoding="utf-8") as f:
         f.write(line + "\n")
 
-
 def check_admin_code(login: str, code: str):
     if login not in pending_admin_actions:
         return False
@@ -88,7 +90,6 @@ def check_admin_code(login: str, code: str):
 @app.get("/", response_class=HTMLResponse)
 def index(request: Request):
     return templates.TemplateResponse("index.html", {"request": request})
-
 
 # --------------------------- РЕГИСТРАЦИЯ ---------------------------
 
@@ -155,12 +156,12 @@ def login_user_form(
 
     response = RedirectResponse(url="/dashboard", status_code=303)
     response.set_cookie(
-    key="login",
-    value=login.encode('utf-8').hex(),
-    httponly=False,
-    secure=False,
-    samesite="lax"
-)
+        key="login",
+        value=login.encode('utf-8').hex(),
+        httponly=True,
+        secure=True,
+        samesite="strict"
+    )
 
     if is_admin:
         code = f"{random.randint(100000, 999999)}"
@@ -170,25 +171,26 @@ def login_user_form(
             url = f"https://api.telegram.org/bot{user.decrypt_telegram_token()}/sendMessage"
             requests.post(url, data={"chat_id": user.telegram_id, "text": f"Код подтверждения входа администратора: {code}"})
         except Exception as e:
-            print("Ошибка Telegram:", e)
+            logging.error(f"Ошибка Telegram: {e}")
 
         response = RedirectResponse(url="/admin-confirm", status_code=303)
         response.set_cookie(
             key="login",
             value=login.encode('utf-8').hex(),
-            httponly=False,
-            secure=False,
-            samesite="lax"
+            httponly=True,
+            secure=True,
+            samesite="strict"
         )
         return response
 
-    # ✅ Это нужно для обычных пользователей
     response.set_cookie(
         key="is_admin",
-        value="False"
+        value="False",
+        httponly=True,
+        secure=True,
+        samesite="strict"
     )
     return response
-
 
 # --------------------------- JSON-API для ПРИЛОЖЕНИЯ (с HWID) ---------------------------
 
@@ -205,7 +207,7 @@ class LoginResponse(BaseModel):
 
 @app.post("/api/login", response_model=LoginResponse)
 def login_via_app(request: LoginRequest, db: Session = Depends(get_db)):
-    print("ПОЛУЧЕННЫЕ ДАННЫЕ:", request.login, request.password, request.hwid)
+    logging.info(f"API login: {request.login}, HWID: {request.hwid}")
     user = db.query(User).filter(User.login == request.login).first()
     if not user:
         raise HTTPException(status_code=404, detail="Пользователь не найден")
@@ -226,7 +228,7 @@ def login_via_app(request: LoginRequest, db: Session = Depends(get_db)):
         telegram_token=user.decrypt_telegram_token()
     )
 
-# --------------------------- DASHBOARD и HWID RESET (остаются) ---------------------------
+# --------------------------- DASHBOARD и HWID RESET ---------------------------
 
 @app.get("/dashboard", response_class=HTMLResponse)
 def show_dashboard(request: Request, db: Session = Depends(get_db)):
@@ -255,8 +257,6 @@ def show_dashboard(request: Request, db: Session = Depends(get_db)):
         "subscription_expires": user.subscription_expires_at.strftime('%Y-%m-%d %H:%M:%S') if user.subscription_expires_at else "нет",
         "subscription_active": subscription_active
     })
-CRYPTOCLOUD_API_KEY = "eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJ1dWlkIjoiTlRFME1EST0iLCJ0eXBlIjoicHJvamVjdCIsInYiOiI2ODllODcyMzA4MDQxMTEyZGM2ZjQzZTM2ZGEwMzVjMjFlMTA0M2E4NWY3ZThiMWI1YWNhMTRmNzUzYzk5ZGRjIiwiZXhwIjo4ODE0NTMwMjQ1Mn0.Cstegj5Y4rHCo9BTnKM_985Q06l5dziw6KDPHYsECHs"
-CRYPTOCLOUD_PROJECT_ID = "A1BHwCXKDvWClDZ3"
 
 async def create_invoice(login: str) -> str:
     try:
@@ -268,27 +268,22 @@ async def create_invoice(login: str) -> str:
                     "amount": 30,
                     "currency": "USD",
                     "shop_id": CRYPTOCLOUD_PROJECT_ID,
-                    "custom_fields": { "login": login }
-
+                    "custom_fields": json.dumps({"login": login})
                 }
             )
-
             result = response.json()
-            print("📦 Ответ от CryptoCloud:", json.dumps(result, indent=2, ensure_ascii=False))
-
+            logging.info(f"Ответ от CryptoCloud: {json.dumps(result, indent=2, ensure_ascii=False)}")
             result_data = result.get("result") or {}
             link = result_data.get("link")
-
             if result.get("status") == "success" and link:
                 return link
             else:
-                print("❌ Ошибка при создании инвойса:", json.dumps(result, indent=2, ensure_ascii=False))
+                logging.error(f"Ошибка при создании инвойса: {json.dumps(result, indent=2, ensure_ascii=False)}")
                 return "/payment-failed"
-
     except Exception as e:
-        print("Исключение при создании инвойса:", str(e))
+        logging.error(f"Исключение при создании инвойса: {str(e)}")
         return "/payment-failed"
-    
+
 @app.post("/request-hwid-reset", response_class=HTMLResponse)
 def request_hwid_reset(
     request: Request,
@@ -311,6 +306,7 @@ def request_hwid_reset(
         data = {"chat_id": user.telegram_id, "text": f"Код для сброса HWID: {code}"}
         requests.post(url, data=data)
     except Exception as e:
+        logging.error(f"Ошибка отправки в Telegram: {e}")
         return templates.TemplateResponse("dashboard.html", {
             "request": request,
             "login": login,
@@ -389,7 +385,6 @@ def extend_subscription(request: Request, login: str = Form(...), db: Session = 
 
     return RedirectResponse(url="/dashboard", status_code=303)
 
-
 from fastapi.responses import JSONResponse
 
 @app.get("/debug/users")
@@ -400,7 +395,6 @@ def debug_users(db: Session = Depends(get_db)):
 @app.get("/view_users", response_class=HTMLResponse)
 def view_users(request: Request, db: Session = Depends(get_db)):
     users = db.query(User).all()
-
     log_entries = db.query(AdminLog).order_by(AdminLog.timestamp.desc()).limit(100).all()
 
     return templates.TemplateResponse("view_users.html", {
@@ -415,7 +409,6 @@ def send_admin_code(
     login: str = Form(...),
     db: Session = Depends(get_db)
 ):
-    # Получаем администратора
     login_hex = request.cookies.get("login")
     try:
         admin_login = bytes.fromhex(login_hex).decode("utf-8") if login_hex else None
@@ -426,7 +419,6 @@ def send_admin_code(
     if not admin:
         raise HTTPException(status_code=403, detail="Нет доступа")
 
-    # Генерация кода для подтверждения
     code = f"{random.randint(100000, 999999)}"
     pending_admin_actions[login] = {"code": code, "timestamp": time.time()}
 
@@ -437,6 +429,7 @@ def send_admin_code(
         text = f"Код подтверждения: {code}"
         requests.post(url, data={"chat_id": chat_id, "text": text})
     except Exception as e:
+        logging.error(f"Ошибка Telegram: {e}")
         raise HTTPException(status_code=500, detail=f"Ошибка Telegram: {e}")
 
     return RedirectResponse(url="/view_users", status_code=303)
@@ -533,7 +526,6 @@ def show_admin_confirm_page(request: Request):
 def payment_success(request: Request):
     return templates.TemplateResponse("payment_success.html", {"request": request})
 
-
 @app.get("/payment-failed", response_class=HTMLResponse)
 def payment_failed(request: Request):
     return templates.TemplateResponse("payment_failed.html", {"request": request})
@@ -543,33 +535,69 @@ async def payment_webhook(request: Request, db: Session = Depends(get_db)):
     try:
         form = await request.form()
         data = dict(form)
-        print("Webhook получен (FORM):", data)
+        logging.info(f"Webhook получен: {data}")
 
         if data.get("status") != "success":
+            logging.info("Платёж не успешен, пропускаем")
             return {"ok": True}
-        
-        print("🌐 Все поля формы:", data)
-        login = data.get("custom_fields[login]")
+
+        invoice_id = data.get("invoice_id")
+        if not invoice_id:
+            logging.error("invoice_id отсутствует")
+            return {"error": "invoice_id отсутствует"}
+
+        # Проверка идемпотентности
+        if db.query(Payment).filter(Payment.invoice_id == invoice_id).first():
+            logging.info(f"Платёж {invoice_id} уже обработан")
+            return {"ok": True}
+
+        # Извлечение login
+        login = None
+        if "custom_fields" in data:
+            try:
+                custom_fields = data["custom_fields"]
+                login = json.loads(custom_fields)["login"] if isinstance(custom_fields, str) else custom_fields["login"]
+            except (ValueError, KeyError) as e:
+                logging.error(f"Ошибка custom_fields: {e}")
+                return {"error": f"Ошибка custom_fields: {e}"}
+        else:
+            logging.error("custom_fields отсутствует в вебхуке")
+            return {"error": "custom_fields отсутствует"}
+
         if not login:
+            logging.error("Логин не передан")
             return {"error": "Логин не передан"}
 
         user = db.query(User).filter(User.login == login).first()
         if not user:
+            logging.error(f"Пользователь {login} не найден")
             return {"error": "Пользователь не найден"}
 
+        # Продление подписки
         if user.subscription_expires_at and user.subscription_expires_at > datetime.utcnow():
             user.subscription_expires_at += timedelta(days=30)
         else:
             user.subscription_expires_at = datetime.utcnow() + timedelta(days=30)
 
+        # Сохранение платежа
+        payment = Payment(
+            invoice_id=invoice_id,
+            user_login=login,
+            amount=float(data.get("amount_crypto", 0)),
+            status="success"
+        )
+        db.add(payment)
         db.commit()
-        print(f"✅ Подписка успешно продлена для пользователя: {login}")
+        logging.info(f"Подписка продлена для {login}, платёж {invoice_id} сохранён")
 
         return {"ok": True}
+    except SQLAlchemyError as e:
+        db.rollback()
+        logging.error(f"Ошибка базы данных: {e}")
+        return {"error": f"Ошибка базы данных: {e}"}
     except Exception as e:
-        print("Ошибка вебхука:", e)
+        logging.error(f"Ошибка вебхука: {e}")
         return {"error": str(e)}
-
 
 @app.get("/pay")
 async def redirect_to_payment(request: Request):
@@ -583,6 +611,8 @@ async def redirect_to_payment(request: Request):
         return RedirectResponse(url="/login")
 
     invoice_url = await create_invoice(login)
+    if invoice_url == "/payment-failed":
+        return templates.TemplateResponse("payment_failed.html", {"request": request, "error": "Не удалось создать инвойс"})
     return RedirectResponse(url=invoice_url)
 
 @app.post("/admin-confirm", response_class=HTMLResponse)
@@ -597,7 +627,7 @@ def confirm_admin_code(
     except:
         login = None
 
-    if not login or login not in pending_admin_actions:  # <--- вот тут было logins, стало actions
+    if not login or login not in pending_admin_actions:
         return templates.TemplateResponse("admin_confirm.html", {
             "request": request,
             "error": "Доступ запрещён или код не запрашивался",
@@ -617,7 +647,6 @@ def confirm_admin_code(
             }
         })
 
-    # Успешно подтверждено
     response = RedirectResponse(url="/dashboard", status_code=303)
-    response.set_cookie(key="is_admin", value="True")
+    response.set_cookie(key="is_admin", value="True", httponly=True, secure=True, samesite="strict")
     return response
