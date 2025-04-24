@@ -16,7 +16,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy.exc import SQLAlchemyError
 from passlib.hash import bcrypt
 from pydantic import BaseModel
-from models import User, SessionLocal, fernet, AdminLog, Base, Payment, PendingInvoice  # Добавляем PendingInvoice
+from models import User, SessionLocal, fernet, AdminLog, Base, Payment, PendingInvoice
 from dotenv import load_dotenv
 
 # Настройка логирования для файла и консоли
@@ -60,8 +60,8 @@ def get_db():
         db.close()
 
 pending_hwid_resets = {}
-pending_admin_logins = {}  # login: {"code": str, "timestamp": float}
-pending_admin_actions = {}  # login: {code, timestamp}
+pending_admin_logins = {}
+pending_admin_actions = {}
 
 LOG_DIR = Path("logs")
 LOG_DIR.mkdir(exist_ok=True)
@@ -76,10 +76,8 @@ def log_admin_action(admin_login: str, action: str, target_login: str, db: Sessi
     action_str = messages.get(action, action)
     timestamp = datetime.now()
 
-    # Логируем действие администратора
     logging.info(f"Админ {admin_login} выполнил действие '{action_str}' для {target_login}")
 
-    # Сохраняем в базу
     db.add(AdminLog(
         admin_login=admin_login,
         action=action_str,
@@ -88,7 +86,6 @@ def log_admin_action(admin_login: str, action: str, target_login: str, db: Sessi
     ))
     db.commit()
 
-    # Сохраняем в файл
     line = f"[{timestamp.strftime('%Y-%m-%d %H:%M:%S')}] Администратор: {admin_login} | Действие: {action_str} | Пользователь: {target_login}"
     with open(LOG_FILE, "a", encoding="utf-8") as f:
         f.write(line + "\n")
@@ -317,12 +314,14 @@ async def create_invoice(login: str, db: Session = Depends(get_db)) -> str:
             logging.info(f"Ответ от CryptoCloud: {json.dumps(result, indent=2, ensure_ascii=False)}")
             result_data = result.get("result") or {}
             link = result_data.get("link")
-            invoice_id = result_data.get("uuid")
+            invoice_id = result_data.get("uuid")  # Получаем uuid (INV-L13WHUAY)
             if result.get("status") == "success" and link:
-                pending_invoice = PendingInvoice(invoice_id=invoice_id, user_login=login)
+                # Убираем префикс INV- для соответствия вебхуку
+                invoice_id_clean = invoice_id.replace("INV-", "")
+                pending_invoice = PendingInvoice(invoice_id=invoice_id_clean, user_login=login)
                 db.add(pending_invoice)
                 db.commit()
-                logging.info(f"Инвойс успешно создан для {login}, ссылка: {link}, invoice_id: {invoice_id}")
+                logging.info(f"Инвойс успешно создан для {login}, ссылка: {link}, invoice_id: {invoice_id_clean}")
                 return link
             else:
                 logging.error(f"Ошибка при создании инвойса для {login}: {json.dumps(result, indent=2, ensure_ascii=False)}")
@@ -635,17 +634,19 @@ async def payment_webhook(request: Request, db: Session = Depends(get_db)):
         if pending_invoice:
             login = pending_invoice.user_login
             logging.info(f"Логин извлечён из PendingInvoice: {login}, invoice_id: {invoice_id}")
-        elif "custom_fields" in data:
-            try:
-                custom_fields = data["custom_fields"]
-                login = json.loads(custom_fields)["login"] if isinstance(custom_fields, str) else custom_fields["login"]
-                logging.info(f"Логин извлечён из custom_fields: {login}")
-            except (ValueError, KeyError) as e:
-                logging.error(f"Ошибка парсинга custom_fields: {e}")
-                return {"error": f"Ошибка custom_fields: {e}"}
         else:
-            logging.error("custom_fields и pending_invoice отсутствуют")
-            return {"error": "custom_fields и pending_invoice отсутствуют"}
+            logging.warning(f"PendingInvoice не найден для invoice_id: {invoice_id}")
+            if "custom_fields" in data:
+                try:
+                    custom_fields = data["custom_fields"]
+                    login = json.loads(custom_fields)["login"] if isinstance(custom_fields, str) else custom_fields["login"]
+                    logging.info(f"Логин извлечён из custom_fields: {login}")
+                except (ValueError, KeyError) as e:
+                    logging.error(f"Ошибка парсинга custom_fields: {e}")
+                    return {"error": f"Ошибка custom_fields: {e}"}
+            else:
+                logging.error("custom_fields отсутствует в вебхуке")
+                return {"error": "custom_fields отсутствует"}
 
         if not login:
             logging.error("Логин не передан в вебхуке")
