@@ -5,6 +5,7 @@ import requests
 import logging
 import httpx
 import json
+import sys
 from pathlib import Path
 from datetime import datetime, timedelta
 from fastapi import FastAPI, Request, Form, Depends, HTTPException
@@ -15,15 +16,23 @@ from sqlalchemy.orm import Session
 from sqlalchemy.exc import SQLAlchemyError
 from passlib.hash import bcrypt
 from pydantic import BaseModel
-from models import User, SessionLocal, fernet, AdminLog, Base, Payment  # Добавьте Payment
+from models import User, SessionLocal, fernet, AdminLog, Base, Payment, PendingInvoice  # Добавляем PendingInvoice
 from dotenv import load_dotenv
 
-# Настройка логирования
-logging.basicConfig(
-    filename="app.log",
-    level=logging.INFO,
-    format='%(asctime)s - %(levelname)s - %(message)s'
-)
+# Настройка логирования для файла и консоли
+logger = logging.getLogger()
+logger.setLevel(logging.INFO)
+formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
+
+# Логи в файл
+file_handler = logging.FileHandler("app.log")
+file_handler.setFormatter(formatter)
+logger.addHandler(file_handler)
+
+# Логи в консоль
+console_handler = logging.StreamHandler(sys.stdout)
+console_handler.setFormatter(formatter)
+logger.addHandler(console_handler)
 
 load_dotenv()
 
@@ -290,7 +299,7 @@ def show_dashboard(request: Request, db: Session = Depends(get_db)):
         "subscription_active": subscription_active
     })
 
-async def create_invoice(login: str) -> str:
+async def create_invoice(login: str, db: Session = Depends(get_db)) -> str:
     logging.info(f"Создание инвойса для {login}")
     try:
         async with httpx.AsyncClient() as client:
@@ -301,15 +310,19 @@ async def create_invoice(login: str) -> str:
                     "amount": 30,
                     "currency": "USD",
                     "shop_id": CRYPTOCLOUD_PROJECT_ID,
-                    "custom_fields": json.dumps({"login": login})
+                    "custom_fields": {"login": login}
                 }
             )
             result = response.json()
             logging.info(f"Ответ от CryptoCloud: {json.dumps(result, indent=2, ensure_ascii=False)}")
             result_data = result.get("result") or {}
             link = result_data.get("link")
+            invoice_id = result_data.get("uuid")
             if result.get("status") == "success" and link:
-                logging.info(f"Инвойс успешно создан для {login}, ссылка: {link}")
+                pending_invoice = PendingInvoice(invoice_id=invoice_id, user_login=login)
+                db.add(pending_invoice)
+                db.commit()
+                logging.info(f"Инвойс успешно создан для {login}, ссылка: {link}, invoice_id: {invoice_id}")
                 return link
             else:
                 logging.error(f"Ошибка при создании инвойса для {login}: {json.dumps(result, indent=2, ensure_ascii=False)}")
@@ -618,7 +631,11 @@ async def payment_webhook(request: Request, db: Session = Depends(get_db)):
 
         # Извлечение login
         login = None
-        if "custom_fields" in data:
+        pending_invoice = db.query(PendingInvoice).filter(PendingInvoice.invoice_id == invoice_id).first()
+        if pending_invoice:
+            login = pending_invoice.user_login
+            logging.info(f"Логин извлечён из PendingInvoice: {login}, invoice_id: {invoice_id}")
+        elif "custom_fields" in data:
             try:
                 custom_fields = data["custom_fields"]
                 login = json.loads(custom_fields)["login"] if isinstance(custom_fields, str) else custom_fields["login"]
@@ -627,8 +644,8 @@ async def payment_webhook(request: Request, db: Session = Depends(get_db)):
                 logging.error(f"Ошибка парсинга custom_fields: {e}")
                 return {"error": f"Ошибка custom_fields: {e}"}
         else:
-            logging.error("custom_fields отсутствует в вебхуке")
-            return {"error": "custom_fields отсутствует"}
+            logging.error("custom_fields и pending_invoice отсутствуют")
+            return {"error": "custom_fields и pending_invoice отсутствуют"}
 
         if not login:
             logging.error("Логин не передан в вебхуке")
@@ -657,6 +674,11 @@ async def payment_webhook(request: Request, db: Session = Depends(get_db)):
         db.commit()
         logging.info(f"Подписка продлена для {login} с {old_expiry} до {user.subscription_expires_at}, платёж {invoice_id} сохранён")
 
+        if pending_invoice:
+            db.delete(pending_invoice)
+            db.commit()
+            logging.info(f"PendingInvoice удалён для invoice_id: {invoice_id}")
+
         return {"ok": True}
     except SQLAlchemyError as e:
         db.rollback()
@@ -667,7 +689,7 @@ async def payment_webhook(request: Request, db: Session = Depends(get_db)):
         return {"error": str(e)}
 
 @app.get("/pay")
-async def redirect_to_payment(request: Request):
+async def redirect_to_payment(request: Request, db: Session = Depends(get_db)):
     login_hex = request.cookies.get("login")
     try:
         login = bytes.fromhex(login_hex).decode("utf-8")
@@ -680,7 +702,7 @@ async def redirect_to_payment(request: Request):
         return RedirectResponse(url="/login")
 
     logging.info(f"Перенаправление на оплату для {login}")
-    invoice_url = await create_invoice(login)
+    invoice_url = await create_invoice(login, db)
     if invoice_url == "/payment-failed":
         logging.error(f"Не удалось создать инвойс для {login}")
         return templates.TemplateResponse("payment_failed.html", {"request": request, "error": "Не удалось создать инвойс"})
