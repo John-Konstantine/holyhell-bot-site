@@ -263,16 +263,15 @@ async def create_invoice(login: str) -> str:
         async with httpx.AsyncClient() as client:
             response = await client.post(
                 "https://api.cryptocloud.plus/v2/invoice/create",
-                headers={
-                    "Authorization": f"Token {CRYPTOCLOUD_API_KEY}",
-                },
-                data={
+                headers={"Authorization": f"Token {CRYPTOCLOUD_API_KEY}"},
+                json={
                     "amount": 30,
                     "currency": "USD",
                     "shop_id": CRYPTOCLOUD_PROJECT_ID,
-                    "custom_fields[login]": login
+                    "custom_fields": { "login": login }  # передача login в nested JSON
                 }
             )
+
             result = response.json()
             if result.get("status") == "success" and "link" in result["result"]:
                 return result["result"]["link"]
