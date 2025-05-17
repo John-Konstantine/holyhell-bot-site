@@ -19,7 +19,6 @@ from pydantic import BaseModel
 from models import User, SessionLocal, fernet, AdminLog, Base, Payment, PendingInvoice
 from apscheduler.schedulers.background import BackgroundScheduler
 from dotenv import load_dotenv
-from pytz import timezone
 
 # Настройка логирования для файла и консоли
 logger = logging.getLogger()
@@ -56,7 +55,7 @@ def send_subscription_alerts():
     Каждые 3 часа проверяем, у кого до конца подписки осталось 1–4 дня,
     и шлём Telegram-уведомление.
     """
-    now = datetime.now(timezone('UTC'))
+    now = datetime.utcnow()
     db = SessionLocal()
     try:
         users = (
