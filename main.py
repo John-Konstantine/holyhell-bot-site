@@ -56,7 +56,7 @@ def send_subscription_alerts():
     Каждые 3 часа проверяем, у кого до конца подписки осталось 1–4 дня,
     и шлём Telegram-уведомление.
     """
-    now = datetime.now(timezone.utc)
+    now = datetime.utcnow()
     db = SessionLocal()
     try:
         users = (
@@ -207,7 +207,7 @@ async def register_user_form(
         api_secret_encrypted=encrypted_secret,
         telegram_id=telegram_id,
         telegram_token_encrypted=encrypted_token,
-        subscription_expires_at=datetime.now(timezone.utc) + timedelta(days=30)
+        subscription_expires_at=datetime.utcnow() + timedelta(days=30)
     )
 
     db.add(new_user)
@@ -310,7 +310,7 @@ def login_via_app(request: LoginRequest, db: Session = Depends(get_db)):
         logging.error(f"API вход отклонён: неверный пароль для {request.login}")
         raise HTTPException(status_code=401, detail="Неверный пароль")
 
-    if not user.subscription_expires_at or user.subscription_expires_at < datetime.now(timezone.utc):
+    if not user.subscription_expires_at or user.subscription_expires_at < datetime.utcnow():
         logging.error(f"API вход отклонён: подписка для {request.login} неактивна")
         raise HTTPException(status_code=403, detail="Подписка неактивна или истекла")
 
@@ -354,7 +354,7 @@ def show_dashboard(request: Request, db: Session = Depends(get_db)):
 
     subscription_active = bool(
         user.subscription_expires_at
-        and user.subscription_expires_at > datetime.now(timezone.utc)
+        and user.subscription_expires_at > datetime.utcnow()
     )
     logging.info(f"Открыт дашборд для {login}, подписка активна: {subscription_active}")
 
@@ -479,7 +479,7 @@ def confirm_hwid_reset(
 
     subscription_active = bool(
         user.subscription_expires_at
-        and user.subscription_expires_at > datetime.now(timezone.utc)
+        and user.subscription_expires_at > datetime.utcnow()
     )
 
     return templates.TemplateResponse("dashboard.html", {
@@ -509,10 +509,10 @@ def extend_subscription(request: Request, login: str = Form(...), db: Session = 
         logging.error(f"Продление подписки отклонено: пользователь {login} не найден")
         raise HTTPException(status_code=404, detail="Пользователь не найден")
 
-    if user.subscription_expires_at and user.subscription_expires_at > datetime.now(timezone.utc):
+    if user.subscription_expires_at and user.subscription_expires_at > datetime.utcnow():
         user.subscription_expires_at += timedelta(days=30)
     else:
-        user.subscription_expires_at = datetime.now(timezone.utc) + timedelta(days=30)
+        user.subscription_expires_at = datetime.utcnow() + timedelta(days=30)
 
     db.commit()
     logging.info(f"Подписка продлена для {login} до {user.subscription_expires_at}")
@@ -587,10 +587,10 @@ def extend_by_admin(
 
     user = db.query(User).filter(User.login == login).first()
     if user:
-        if user.subscription_expires_at and user.subscription_expires_at > datetime.now(timezone.utc):
+        if user.subscription_expires_at and user.subscription_expires_at > datetime.utcnow():
             user.subscription_expires_at += timedelta(days=30)
         else:
-            user.subscription_expires_at = datetime.now(timezone.utc) + timedelta(days=30)
+            user.subscription_expires_at = datetime.utcnow() + timedelta(days=30)
         db.commit()
         logging.info(f"Подписка продлена админом для {login} до {user.subscription_expires_at}")
 
@@ -731,10 +731,10 @@ async def payment_webhook(request: Request, db: Session = Depends(get_db)):
             return {"error": "Пользователь не найден"}
 
         old_expiry = user.subscription_expires_at
-        if user.subscription_expires_at and user.subscription_expires_at > datetime.now(timezone.utc):
+        if user.subscription_expires_at and user.subscription_expires_at > datetime.utcnow():
             user.subscription_expires_at += timedelta(days=30)
         else:
-            user.subscription_expires_at = datetime.now(timezone.utc) + timedelta(days=30)
+            user.subscription_expires_at = datetime.utcnow() + timedelta(days=30)
 
         payment = Payment(
             invoice_id=invoice_id,
