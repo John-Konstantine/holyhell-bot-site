@@ -9,7 +9,7 @@ import sys
 from pathlib import Path
 from datetime import datetime, timedelta
 from fastapi import FastAPI, Request, Form, Depends, HTTPException
-from fastapi.responses import HTMLResponse, RedirectResponse, JSONResponse
+from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from sqlalchemy.orm import Session
@@ -19,7 +19,42 @@ from pydantic import BaseModel
 from models import User, SessionLocal, fernet, AdminLog, Base, Payment, PendingInvoice
 from apscheduler.schedulers.background import BackgroundScheduler
 from dotenv import load_dotenv
-from pytz import timezone
+
+def send_subscription_alerts():
+    """
+    Каждые 6 часов проверяем, у кого до конца подписки осталось 1–4 дня,
+    и шлём Telegram-уведомление.
+    """
+    now = datetime.utcnow()
+    db = SessionLocal()
+    try:
+        users = (
+            db.query(User)
+              .filter(
+                  User.subscription_expires_at > now,
+                  User.subscription_expires_at < now + timedelta(days=5)
+              )
+              .all()
+        )
+        for user in users:
+            days_left = (user.subscription_expires_at - now).days
+            if days_left > 0:
+                token = user.decrypt_telegram_token()
+                chat_id = user.telegram_id
+                text = (
+                    f"❗️ Ваша подписка истекает через {days_left} "
+                    f"дней (до {user.subscription_expires_at.strftime('%Y-%m-%d')})."
+                )
+                try:
+                    requests.post(
+                        f"https://api.telegram.org/bot{token}/sendMessage",
+                        data={"chat_id": chat_id, "text": text}
+                    )
+                    logging.info(f"[SubAlert] {user.login}: осталось {days_left} дн.")
+                except Exception as e:
+                    logging.error(f"[SubAlert] ошибка для {user.login}: {e}")
+    finally:
+        db.close()
 
 # Настройка логирования для файла и консоли
 logger = logging.getLogger()
@@ -50,58 +85,17 @@ app.mount("/static", StaticFiles(directory=os.path.join(BASE_DIR, "static")), na
 app.mount("/downloads", StaticFiles(directory=os.path.join(BASE_DIR, "downloads")), name="downloads")
 templates = Jinja2Templates(directory=os.path.join(BASE_DIR, "templates"))
 
-# Функция отправки уведомлений о подписке
-def send_subscription_alerts():
-    """
-    Каждые 24 часа проверяем, у кого до конца подписки осталось 1–4 дня,
-    и шлём Telegram-уведомление.
-    """
-    now = datetime.now(timezone('UTC'))
-    db = SessionLocal()
-    try:
-        users = (
-            db.query(User)
-              .filter(
-                  User.subscription_expires_at > now,
-                  User.subscription_expires_at < now + timedelta(days=5)
-              )
-              .all()
-        )
-        for user in users:
-            days_left = (user.subscription_expires_at - now).days
-            if days_left > 0:
-                token = user.decrypt_telegram_token()
-                chat_id = user.telegram_id
-                text = (
-                    f"❗️ Ваша подписка истекает через {days_left} "
-                    f"дней (до {user.subscription_expires_at.strftime('%Y-%m-%d')}). "
-                    f"Пожалуйста, продлите подписку в личном кабинете."
-                )
-                try:
-                    response = requests.post(
-                        f"https://api.telegram.org/bot{token}/sendMessage",
-                        data={"chat_id": chat_id, "text": text}
-                    )
-                    response.raise_for_status()
-                    logging.info(f"[SubAlert] {user.login}: осталось {days_left} дн.")
-                except requests.exceptions.RequestException as e:
-                    logging.error(f"[SubAlert] ошибка для {user.login}: {e}")
-    except Exception as e:
-        logging.error(f"[SubAlert] Общая ошибка: {e}")
-    finally:
-        db.close()
-
-# Настройка APScheduler: оповещения о подписке каждые 24 часа
-scheduler = BackgroundScheduler(timezone=timezone('UTC'))
+# === APScheduler: оповещения о подписке каждые 6 часов ===
+scheduler = BackgroundScheduler()
 scheduler.add_job(
     send_subscription_alerts,
     trigger='interval',
-    hours=24
+    hours=6,
+    next_run_time=datetime.utcnow()
 )
 
 @app.on_event("startup")
 def start_scheduler():
-    send_subscription_alerts()  # Первый запуск сразу
     scheduler.start()
 
 @app.on_event("shutdown")
@@ -134,7 +128,7 @@ def log_admin_action(admin_login: str, action: str, target_login: str, db: Sessi
         "delete": "Удаление пользователя"
     }
     action_str = messages.get(action, action)
-    timestamp = datetime.now(timezone('UTC'))
+    timestamp = datetime.now()
 
     logging.info(f"Админ {admin_login} выполнил действие '{action_str}' для {target_login}")
 
@@ -206,7 +200,7 @@ async def register_user_form(
         api_secret_encrypted=encrypted_secret,
         telegram_id=telegram_id,
         telegram_token_encrypted=encrypted_token,
-        subscription_expires_at=datetime.now(timezone('UTC')) + timedelta(days=30)
+        subscription_expires_at=datetime.utcnow() + timedelta(days=30)
     )
 
     db.add(new_user)
@@ -257,8 +251,7 @@ def login_user_form(
 
         try:
             url = f"https://api.telegram.org/bot{user.decrypt_telegram_token()}/sendMessage"
-            response = requests.post(url, data={"chat_id": user.telegram_id, "text": f"Код подтверждения входа администратора: {code}"})
-            response.raise_for_status()
+            requests.post(url, data={"chat_id": user.telegram_id, "text": f"Код подтверждения входа администратора: {code}"})
             logging.info(f"Код отправлен в Telegram для {login}")
         except Exception as e:
             logging.error(f"Ошибка отправки кода в Telegram для {login}: {e}")
@@ -294,8 +287,8 @@ class LoginResponse(BaseModel):
     api_secret: str
     telegram_id: str
     telegram_token: str
-    binance_api_key: str
-    binance_api_secret: str
+    binance_api_key: str  # Будет использовать api_key
+    binance_api_secret: str  # Будет использовать api_secret
 
 @app.post("/api/login", response_model=LoginResponse)
 def login_via_app(request: LoginRequest, db: Session = Depends(get_db)):
@@ -309,7 +302,8 @@ def login_via_app(request: LoginRequest, db: Session = Depends(get_db)):
         logging.error(f"API вход отклонён: неверный пароль для {request.login}")
         raise HTTPException(status_code=401, detail="Неверный пароль")
 
-    if not user.subscription_expires_at or user.subscription_expires_at < datetime.now(timezone('UTC')):
+    # Проверка подписки
+    if not user.subscription_expires_at or user.subscription_expires_at < datetime.utcnow():
         logging.error(f"API вход отклонён: подписка для {request.login} неактивна")
         raise HTTPException(status_code=403, detail="Подписка неактивна или истекла")
 
@@ -327,8 +321,8 @@ def login_via_app(request: LoginRequest, db: Session = Depends(get_db)):
         api_secret=user.decrypt_api_secret(),
         telegram_id=user.telegram_id,
         telegram_token=user.decrypt_telegram_token(),
-        binance_api_key=user.api_key,
-        binance_api_secret=user.decrypt_api_secret()
+        binance_api_key=user.api_key,  # Используем api_key как ключ Binance
+        binance_api_secret=user.decrypt_api_secret()  # Используем api_secret как ключ Binance
     )
 
 # --------------------------- DASHBOARD и HWID RESET ---------------------------
@@ -351,7 +345,7 @@ def show_dashboard(request: Request, db: Session = Depends(get_db)):
         logging.error(f"Перенаправление на страницу входа: пользователь {login} не найден")
         return RedirectResponse(url="/login")
 
-    subscription_active = user.subscription_expires_at and user.subscription_expires_at > datetime.now(timezone('UTC'))
+    subscription_active = user.subscription_expires_at and user.subscription_expires_at > datetime.utcnow()
     logging.info(f"Открыт дашборд для {login}, подписка активна: {subscription_active}")
 
     return templates.TemplateResponse("dashboard.html", {
@@ -383,8 +377,9 @@ async def create_invoice(login: str, db: Session = Depends(get_db)) -> str:
             logging.info(f"Ответ от CryptoCloud: {json.dumps(result, indent=2, ensure_ascii=False)}")
             result_data = result.get("result") or {}
             link = result_data.get("link")
-            invoice_id = result_data.get("uuid")
+            invoice_id = result_data.get("uuid")  # Получаем uuid (INV-L13WHUAY)
             if result.get("status") == "success" and link:
+                # Убираем префикс INV- для соответствия вебхуку
                 invoice_id_clean = invoice_id.replace("INV-", "")
                 pending_invoice = PendingInvoice(invoice_id=invoice_id_clean, user_login=login)
                 db.add(pending_invoice)
@@ -421,8 +416,7 @@ def request_hwid_reset(
     try:
         url = f"https://api.telegram.org/bot{user.decrypt_telegram_token()}/sendMessage"
         data = {"chat_id": user.telegram_id, "text": f"Код для сброса HWID: {code}"}
-        response = requests.post(url, data=data)
-        response.raise_for_status()
+        requests.post(url, data=data)
         logging.info(f"Код сброса HWID отправлен в Telegram для {login}")
     except Exception as e:
         logging.error(f"Ошибка отправки кода в Telegram для {login}: {e}")
@@ -473,7 +467,7 @@ def confirm_hwid_reset(
     pending_hwid_resets.pop(login, None)
     logging.info(f"HWID успешно сброшено для {login}")
 
-    subscription_active = user.subscription_expires_at and user.subscription_expires_at > datetime.now(timezone('UTC'))
+    subscription_active = user.subscription_expires_at and user.subscription_expires_at > datetime.utcnow()
 
     return templates.TemplateResponse("dashboard.html", {
         "request": request,
@@ -502,15 +496,17 @@ def extend_subscription(request: Request, login: str = Form(...), db: Session = 
         logging.error(f"Продление подписки отклонено: пользователь {login} не найден")
         raise HTTPException(status_code=404, detail="Пользователь не найден")
 
-    if user.subscription_expires_at and user.subscription_expires_at > datetime.now(timezone('UTC')):
+    if user.subscription_expires_at and user.subscription_expires_at > datetime.utcnow():
         user.subscription_expires_at += timedelta(days=30)
     else:
-        user.subscription_expires_at = datetime.now(timezone('UTC')) + timedelta(days=30)
+        user.subscription_expires_at = datetime.utcnow() + timedelta(days=30)
 
     db.commit()
     logging.info(f"Подписка продлена для {login} до {user.subscription_expires_at}")
 
     return RedirectResponse(url="/dashboard", status_code=303)
+
+from fastapi.responses import JSONResponse
 
 @app.get("/debug/users")
 def debug_users(db: Session = Depends(get_db)):
@@ -557,8 +553,7 @@ def send_admin_code(
         chat_id = admin.telegram_id
         url = f"https://api.telegram.org/bot{token}/sendMessage"
         text = f"Код подтверждения: {code}"
-        response = requests.post(url, data={"chat_id": chat_id, "text": text})
-        response.raise_for_status()
+        requests.post(url, data={"chat_id": chat_id, "text": text})
         logging.info(f"Код отправлен в Telegram для {admin_login}")
     except Exception as e:
         logging.error(f"Ошибка Telegram для {admin_login}: {e}")
@@ -580,10 +575,10 @@ def extend_by_admin(
 
     user = db.query(User).filter(User.login == login).first()
     if user:
-        if user.subscription_expires_at and user.subscription_expires_at > datetime.now(timezone('UTC')):
+        if user.subscription_expires_at and user.subscription_expires_at > datetime.utcnow():
             user.subscription_expires_at += timedelta(days=30)
         else:
-            user.subscription_expires_at = datetime.now(timezone('UTC')) + timedelta(days=30)
+            user.subscription_expires_at = datetime.utcnow() + timedelta(days=30)
         db.commit()
         logging.info(f"Подписка продлена админом для {login} до {user.subscription_expires_at}")
 
@@ -691,10 +686,12 @@ async def payment_webhook(request: Request, db: Session = Depends(get_db)):
             logging.error("invoice_id отсутствует в вебхуке")
             return {"error": "invoice_id отсутствует"}
 
+        # Проверка идемпотентности
         if db.query(Payment).filter(Payment.invoice_id == invoice_id).first():
             logging.info(f"Платёж {invoice_id} уже обработан")
             return {"ok": True}
 
+        # Извлечение login
         login = None
         pending_invoice = db.query(PendingInvoice).filter(PendingInvoice.invoice_id == invoice_id).first()
         if pending_invoice:
@@ -723,12 +720,14 @@ async def payment_webhook(request: Request, db: Session = Depends(get_db)):
             logging.error(f"Пользователь {login} не найден для обработки вебхука")
             return {"error": "Пользователь не найден"}
 
+        # Продление подписки
         old_expiry = user.subscription_expires_at
-        if user.subscription_expires_at and user.subscription_expires_at > datetime.now(timezone('UTC')):
+        if user.subscription_expires_at and user.subscription_expires_at > datetime.utcnow():
             user.subscription_expires_at += timedelta(days=30)
         else:
-            user.subscription_expires_at = datetime.now(timezone('UTC')) + timedelta(days=30)
+            user.subscription_expires_at = datetime.utcnow() + timedelta(days=30)
 
+        # Сохранение платежа
         payment = Payment(
             invoice_id=invoice_id,
             user_login=login,
