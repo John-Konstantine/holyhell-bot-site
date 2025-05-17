@@ -63,7 +63,7 @@ def send_subscription_alerts():
             db.query(User)
               .filter(
                   User.subscription_expires_at > now,
-                  User.subscription_expires_at < now + timedelta(days=5)
+                  User.subscription_expires_at < now + timedelta(days=8)
               )
               .all()
         )
