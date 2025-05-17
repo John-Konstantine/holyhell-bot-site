@@ -68,7 +68,7 @@ def send_subscription_alerts():
               .all()
         )
         for user in users:
-            days_left = (user.subscription_expires_at - now).days
+            days_left = (user.subscription_expires_at.replace(tzinfo=None) - now).days
             if days_left > 0:
                 token = user.decrypt_telegram_token()
                 chat_id = user.telegram_id
