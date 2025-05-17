@@ -53,7 +53,7 @@ templates = Jinja2Templates(directory=os.path.join(BASE_DIR, "templates"))
 # Функция отправки уведомлений о подписке
 def send_subscription_alerts():
     """
-    Каждые 24 часа проверяем, у кого до конца подписки осталось 1–4 дня,
+    Каждые 3 часа проверяем, у кого до конца подписки осталось 1–4 дня,
     и шлём Telegram-уведомление.
     """
     now = datetime.now(timezone('UTC'))
@@ -91,12 +91,12 @@ def send_subscription_alerts():
     finally:
         db.close()
 
-# Настройка APScheduler: оповещения о подписке каждые 24 часа
+# Настройка APScheduler: оповещения о подписке каждые 3 часа
 scheduler = BackgroundScheduler(timezone=timezone('UTC'))
 scheduler.add_job(
     send_subscription_alerts,
     trigger='interval',
-    hours=24
+    hours=3
 )
 
 @app.on_event("startup")
@@ -351,7 +351,11 @@ def show_dashboard(request: Request, db: Session = Depends(get_db)):
         logging.error(f"Перенаправление на страницу входа: пользователь {login} не найден")
         return RedirectResponse(url="/login")
 
-    subscription_active = user.subscription_expires_at and user.subscription_expires_at > datetime.now(timezone('UTC'))
+        # сравниваем оба времени как UTC-naive
+    subscription_active = bool(
+        user.subscription_expires_at
+        and user.subscription_expires_at > datetime.utcnow()
+    )
     logging.info(f"Открыт дашборд для {login}, подписка активна: {subscription_active}")
 
     return templates.TemplateResponse("dashboard.html", {
@@ -473,7 +477,11 @@ def confirm_hwid_reset(
     pending_hwid_resets.pop(login, None)
     logging.info(f"HWID успешно сброшено для {login}")
 
-    subscription_active = user.subscription_expires_at and user.subscription_expires_at > datetime.now(timezone('UTC'))
+    subscription_active = bool(
+        user.subscription_expires_at
+        and user.subscription_expires_at > datetime.utcnow()
+    )
+
 
     return templates.TemplateResponse("dashboard.html", {
         "request": request,
