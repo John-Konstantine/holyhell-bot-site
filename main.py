@@ -7,8 +7,8 @@ import httpx
 import json
 import sys
 from pathlib import Path
-from datetime import datetime, timedelta
-from fastapi import FastAPI, Request, Form, Depends, HTTPException
+from datetime import datetime, timedelta, timezone
+from fastapi import FastAPI, Request, Form, Depends, HTTPException, BackgroundTasks
 from fastapi.responses import HTMLResponse, RedirectResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
@@ -18,6 +18,7 @@ from passlib.hash import bcrypt
 from pydantic import BaseModel
 from models import User, SessionLocal, fernet, AdminLog, Base, Payment, PendingInvoice
 from apscheduler.schedulers.background import BackgroundScheduler
+from apscheduler.triggers.interval import IntervalTrigger
 from dotenv import load_dotenv
 
 # Настройка логирования для файла и консоли
@@ -55,7 +56,7 @@ def send_subscription_alerts():
     Каждые 3 часа проверяем, у кого до конца подписки осталось 1–4 дня,
     и шлём Telegram-уведомление.
     """
-    now = datetime.utcnow()
+    now = datetime.now(timezone.utc)
     db = SessionLocal()
     try:
         users = (
@@ -91,11 +92,12 @@ def send_subscription_alerts():
         db.close()
 
 # Настройка APScheduler: оповещения о подписке каждые 3 часа
-scheduler = BackgroundScheduler(timezone=timezone('UTC'))
+scheduler = BackgroundScheduler(timezone=timezone.utc)
 scheduler.add_job(
     send_subscription_alerts,
-    trigger='interval',
-    hours=3
+    trigger=IntervalTrigger(hours=3),
+    id='subscription_alerts',
+    replace_existing=True
 )
 
 @app.on_event("startup")
@@ -133,7 +135,7 @@ def log_admin_action(admin_login: str, action: str, target_login: str, db: Sessi
         "delete": "Удаление пользователя"
     }
     action_str = messages.get(action, action)
-    timestamp = datetime.now(timezone('UTC'))
+    timestamp = datetime.now(timezone.utc)
 
     logging.info(f"Админ {admin_login} выполнил действие '{action_str}' для {target_login}")
 
@@ -205,7 +207,7 @@ async def register_user_form(
         api_secret_encrypted=encrypted_secret,
         telegram_id=telegram_id,
         telegram_token_encrypted=encrypted_token,
-        subscription_expires_at=datetime.now(timezone('UTC')) + timedelta(days=30)
+        subscription_expires_at=datetime.now(timezone.utc) + timedelta(days=30)
     )
 
     db.add(new_user)
@@ -308,7 +310,7 @@ def login_via_app(request: LoginRequest, db: Session = Depends(get_db)):
         logging.error(f"API вход отклонён: неверный пароль для {request.login}")
         raise HTTPException(status_code=401, detail="Неверный пароль")
 
-    if not user.subscription_expires_at or user.subscription_expires_at < datetime.now(timezone('UTC')):
+    if not user.subscription_expires_at or user.subscription_expires_at < datetime.now(timezone.utc):
         logging.error(f"API вход отклонён: подписка для {request.login} неактивна")
         raise HTTPException(status_code=403, detail="Подписка неактивна или истекла")
 
@@ -350,10 +352,9 @@ def show_dashboard(request: Request, db: Session = Depends(get_db)):
         logging.error(f"Перенаправление на страницу входа: пользователь {login} не найден")
         return RedirectResponse(url="/login")
 
-        # сравниваем оба времени как UTC-naive
     subscription_active = bool(
         user.subscription_expires_at
-        and user.subscription_expires_at > datetime.utcnow()
+        and user.subscription_expires_at > datetime.now(timezone.utc)
     )
     logging.info(f"Открыт дашборд для {login}, подписка активна: {subscription_active}")
 
@@ -478,9 +479,8 @@ def confirm_hwid_reset(
 
     subscription_active = bool(
         user.subscription_expires_at
-        and user.subscription_expires_at > datetime.utcnow()
+        and user.subscription_expires_at > datetime.now(timezone.utc)
     )
-
 
     return templates.TemplateResponse("dashboard.html", {
         "request": request,
@@ -509,10 +509,10 @@ def extend_subscription(request: Request, login: str = Form(...), db: Session = 
         logging.error(f"Продление подписки отклонено: пользователь {login} не найден")
         raise HTTPException(status_code=404, detail="Пользователь не найден")
 
-    if user.subscription_expires_at and user.subscription_expires_at > datetime.now(timezone('UTC')):
+    if user.subscription_expires_at and user.subscription_expires_at > datetime.now(timezone.utc):
         user.subscription_expires_at += timedelta(days=30)
     else:
-        user.subscription_expires_at = datetime.now(timezone('UTC')) + timedelta(days=30)
+        user.subscription_expires_at = datetime.now(timezone.utc) + timedelta(days=30)
 
     db.commit()
     logging.info(f"Подписка продлена для {login} до {user.subscription_expires_at}")
@@ -587,10 +587,10 @@ def extend_by_admin(
 
     user = db.query(User).filter(User.login == login).first()
     if user:
-        if user.subscription_expires_at and user.subscription_expires_at > datetime.now(timezone('UTC')):
+        if user.subscription_expires_at and user.subscription_expires_at > datetime.now(timezone.utc):
             user.subscription_expires_at += timedelta(days=30)
         else:
-            user.subscription_expires_at = datetime.now(timezone('UTC')) + timedelta(days=30)
+            user.subscription_expires_at = datetime.now(timezone.utc) + timedelta(days=30)
         db.commit()
         logging.info(f"Подписка продлена админом для {login} до {user.subscription_expires_at}")
 
@@ -731,10 +731,10 @@ async def payment_webhook(request: Request, db: Session = Depends(get_db)):
             return {"error": "Пользователь не найден"}
 
         old_expiry = user.subscription_expires_at
-        if user.subscription_expires_at and user.subscription_expires_at > datetime.now(timezone('UTC')):
+        if user.subscription_expires_at and user.subscription_expires_at > datetime.now(timezone.utc):
             user.subscription_expires_at += timedelta(days=30)
         else:
-            user.subscription_expires_at = datetime.now(timezone('UTC')) + timedelta(days=30)
+            user.subscription_expires_at = datetime.now(timezone.utc) + timedelta(days=30)
 
         payment = Payment(
             invoice_id=invoice_id,
