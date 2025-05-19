@@ -1,0 +1,35 @@
+2025-05-16 19:01:29,073 - INFO - Adding job tentatively -- it will be properly scheduled when the scheduler starts
+2025-05-16 19:01:29,089 - INFO - Added job "send_subscription_alerts" to job store "default"
+2025-05-16 19:01:29,089 - INFO - Scheduler started
+2025-05-16 19:01:29,089 - WARNING - Run time of job "send_subscription_alerts (trigger: interval[6:00:00], next run at: 2025-05-16 10:01:29 KST)" was missed by 3:00:00.016935
+2025-05-16 22:01:29,387 - INFO - Running job "send_subscription_alerts (trigger: interval[6:00:00], next run at: 2025-05-17 04:01:29 KST)" (scheduled at 2025-05-16 22:01:29.072838+09:00)
+2025-05-16 22:01:33,219 - INFO - Job "send_subscription_alerts (trigger: interval[6:00:00], next run at: 2025-05-17 04:01:29 KST)" executed successfully
+2025-05-17 04:01:29,687 - INFO - Running job "send_subscription_alerts (trigger: interval[6:00:00], next run at: 2025-05-17 10:01:29 KST)" (scheduled at 2025-05-17 04:01:29.072838+09:00)
+2025-05-17 04:01:30,137 - INFO - Job "send_subscription_alerts (trigger: interval[6:00:00], next run at: 2025-05-17 10:01:29 KST)" executed successfully
+2025-05-17 10:01:29,797 - INFO - Running job "send_subscription_alerts (trigger: interval[6:00:00], next run at: 2025-05-17 16:01:29 KST)" (scheduled at 2025-05-17 10:01:29.072838+09:00)
+2025-05-17 10:01:30,243 - INFO - Job "send_subscription_alerts (trigger: interval[6:00:00], next run at: 2025-05-17 16:01:29 KST)" executed successfully
+2025-05-17 16:01:29,517 - INFO - Running job "send_subscription_alerts (trigger: interval[6:00:00], next run at: 2025-05-17 22:01:29 KST)" (scheduled at 2025-05-17 16:01:29.072838+09:00)
+2025-05-17 16:01:29,998 - INFO - Job "send_subscription_alerts (trigger: interval[6:00:00], next run at: 2025-05-17 22:01:29 KST)" executed successfully
+2025-05-17 22:01:29,712 - INFO - Running job "send_subscription_alerts (trigger: interval[6:00:00], next run at: 2025-05-18 04:01:29 KST)" (scheduled at 2025-05-17 22:01:29.072838+09:00)
+2025-05-17 22:01:30,254 - INFO - Job "send_subscription_alerts (trigger: interval[6:00:00], next run at: 2025-05-18 04:01:29 KST)" executed successfully
+2025-05-17 23:50:40,654 - INFO - Scheduler has been shut down
+2025-05-17 23:50:43,045 - INFO - Adding job tentatively -- it will be properly scheduled when the scheduler starts
+2025-05-17 23:50:43,064 - INFO - Added job "send_subscription_alerts" to job store "default"
+2025-05-17 23:50:43,064 - INFO - Scheduler started
+2025-05-17 23:50:43,064 - WARNING - Run time of job "send_subscription_alerts (trigger: interval[6:00:00], next run at: 2025-05-17 14:50:43 KST)" was missed by 3:00:00.020934
+2025-05-17 23:54:57,996 - INFO - Adding job tentatively -- it will be properly scheduled when the scheduler starts
+2025-05-17 23:54:58,012 - INFO - Added job "send_subscription_alerts" to job store "default"
+2025-05-17 23:54:58,012 - INFO - Scheduler started
+2025-05-17 23:54:58,012 - WARNING - Run time of job "send_subscription_alerts (trigger: interval[6:00:00], next run at: 2025-05-17 14:54:57 KST)" was missed by 3:00:00.016234
+2025-05-18 00:00:57,826 - INFO - Scheduler has been shut down
+2025-05-18 00:09:37,647 - INFO - Adding job tentatively -- it will be properly scheduled when the scheduler starts
+2025-05-18 00:09:41,096 - INFO - Added job "send_subscription_alerts" to job store "default"
+2025-05-18 00:09:41,096 - INFO - Scheduler started
+2025-05-18 00:10:22,744 - INFO - Scheduler has been shut down
+2025-05-18 00:10:24,010 - INFO - Adding job tentatively -- it will be properly scheduled when the scheduler starts
+2025-05-18 00:10:28,949 - INFO - Added job "send_subscription_alerts" to job store "default"
+2025-05-18 00:10:28,949 - INFO - Scheduler started
+2025-05-18 00:11:36,439 - INFO - Adding job tentatively -- it will be properly scheduled when the scheduler starts
+2025-05-18 00:11:41,059 - INFO - Added job "send_subscription_alerts" to job store "default"
+2025-05-18 00:11:41,059 - INFO - Scheduler started
+2025-05-18 00:17:13,828 - INFO - Scheduler has been shut down

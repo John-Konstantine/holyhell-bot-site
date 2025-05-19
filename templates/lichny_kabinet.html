@@ -1,0 +1,249 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <title>Личный кабинет | ProfitBot</title>
+    <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@500&display=swap" rel="stylesheet">
+    <style>
+        * {
+            box-sizing: border-box;
+        }
+
+        body {
+            margin: 0;
+            padding: 0;
+            min-height: 100vh;
+            background: url("stena.jpg") no-repeat center center fixed;
+            background-size: cover;
+            background-color: #000;
+            font-family: 'Orbitron', sans-serif;
+            color: #fff;
+        }
+
+        .wrapper {
+            max-width: 900px;
+            margin: 0 auto;
+            padding: 60px 20px;
+        }
+
+        .logo {
+            font-size: 36px;
+            font-weight: bold;
+            color: #00ffff;
+            text-align: center;
+            text-shadow: 0 0 5px #00ffff, 0 0 15px #00ffff, 0 0 30px #00ffff;
+            margin-bottom: 30px;
+        }
+
+        .neon-box {
+            background: rgba(0, 0, 0, 0.2);
+            border: 2px solid rgba(0, 255, 255, 0.3);
+            padding: 40px;
+            border-radius: 20px;
+            box-shadow: 0 0 10px rgba(0, 255, 255, 0.2),
+                        0 0 30px rgba(0, 255, 255, 0.1),
+                        inset 0 0 10px rgba(0, 255, 255, 0.1);
+        }
+
+        h2, h3 {
+            color: #00ffff;
+            text-shadow: 0 0 8px #00ffff;
+            margin-top: 40px;
+        }
+
+        .label {
+            font-weight: bold;
+            margin-top: 15px;
+            color: #aaffff;
+        }
+
+        .value {
+            margin-top: 5px;
+            margin-bottom: 10px;
+            background: rgba(0, 0, 0, 0.6);
+            padding: 10px 14px;
+            border-radius: 8px;
+            color: white;
+            word-break: break-word;
+            border: 1px solid #00ffff;
+            font-size: 14px;
+        }
+
+        .success {
+            color: #8bc34a;
+        }
+
+        .error {
+            color: #f44336;
+        }
+
+        .button, button {
+            display: inline-block;
+            padding: 12px 28px;
+            font-size: 14px;
+            color: #00ffff;
+            background-color: transparent;
+            border: 2px solid #00ffff;
+            border-radius: 10px;
+            font-weight: bold;
+            text-shadow: 0 0 5px #00ffff;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            margin: 10px 0;
+            font-family: 'Orbitron', sans-serif;
+            width: 100%;
+            text-align: center;
+        }
+
+        .button:hover, button:hover {
+            background-color: rgba(0, 255, 255, 0.1);
+            box-shadow: 0 0 10px #00ffff, 0 0 20px #00ffff;
+            transform: scale(1.02);
+        }
+
+        input[type="text"] {
+            width: 100%;
+            padding: 12px;
+            background-color: rgba(0, 0, 0, 0.6);
+            border: 1px solid #00ffff;
+            border-radius: 8px;
+            color: white;
+            font-size: 14px;
+            text-align: center;
+            margin: 10px 0;
+        }
+
+        input:focus {
+            outline: none;
+            box-shadow: 0 0 8px #00ffff;
+        }
+
+        hr {
+            margin: 40px 0 30px;
+            border: none;
+            border-top: 1px solid #00ffff;
+        }
+
+        #timer {
+            animation: flicker 4s infinite;
+        }
+
+        @keyframes flicker {
+            0%, 18%, 22%, 25%, 50%, 53%, 100% { opacity: 1; }
+            19%, 23%, 51% { opacity: 0.4; }
+        }
+    </style>
+</head>
+<body>
+
+<div class="wrapper">
+    <div class="logo">ProfitBot</div>
+
+    <div class="neon-box">
+        <h2>👤 Личный кабинет</h2>
+
+        <div class="label">Логин:</div>
+        <div class="value">{{ login }}</div>
+
+        <div class="label">Binance API Key:</div>
+        <div class="value">{{ api_key }}</div>
+
+        <div class="label">Binance API Secret:</div>
+        <div class="value">{{ api_secret }}</div>
+
+        <div class="label">Telegram ID:</div>
+        <div class="value">{{ telegram_id }}</div>
+
+        <div class="label">Telegram Token:</div>
+        <div class="value">{{ telegram_token }}</div>
+
+        {% if request.cookies['is_admin'] == 'True' %}
+            <a href="/view_users" class="button">👁️‍🗨️ Просмотр пользователей</a>
+        {% endif %}
+
+        <hr>
+
+        <h3>🖥️ Сброс HWID</h3>
+        {% if hwid_reset_success %}
+            <p class="success">HWID успешно сброшен ✅</p>
+        {% elif hwid_reset_error %}
+            <p class="error">Ошибка: {{ hwid_reset_error }}</p>
+        {% endif %}
+
+        <form method="post" action="/request-hwid-reset">
+            <input type="hidden" name="login" value="{{ login }}">
+            <button type="submit">📩 Отправить код в Telegram</button>
+        </form>
+
+        {% if show_code_input %}
+            <form method="post" action="/confirm-hwid-reset">
+                <input type="hidden" name="login" value="{{ login }}">
+                <input type="text" name="code" placeholder="Введите код из Telegram" required>
+                <button type="submit">✅ Подтвердить сброс</button>
+            </form>
+        {% endif %}
+
+        <hr>
+
+        <h3>⬇️ Скачать бота</h3>
+        <a href="/downloads/ProfitBot.exe" download class="button">💾 Скачать ProfitBot.exe</a>
+
+        <hr>
+
+        <h3>📅 Подписка</h3>
+        {% if subscription_active %}
+            <p class="success">Подписка активна.</p>
+            <p>До окончания осталось: <span id="timer">Загрузка...</span></p>
+            <p>Истекает: {{ subscription_expires }}</p>
+        {% else %}
+            <p class="error">Подписка истекла ❌</p>
+            <p>Истекла: {{ subscription_expires if subscription_expires != 'нет' else 'Нет' }}</p>
+        {% endif %}
+
+        <form method="GET" action="/pay">
+            <input type="hidden" name="login" value="{{ login }}">
+            <button type="submit" class="button">💳 Продлить подписку на 30 дней</button>
+        </form>
+
+        <hr>
+
+        <form method="post" action="/logout">
+            <button type="submit">🚪 Выйти</button>
+        </form>
+    </div>
+</div>
+
+<script>
+    function formatTimeLeft(ms) {
+        const totalSeconds = Math.floor(ms / 1000);
+        const days = Math.floor(totalSeconds / 86400);
+        const hours = Math.floor((totalSeconds % 86400) / 3600);
+        const minutes = Math.floor((totalSeconds % 3600) / 60);
+        const seconds = totalSeconds % 60;
+        return `${days}д ${hours}ч ${minutes}мин. ${seconds}сек.`;
+    }
+
+    {% if subscription_active and subscription_expires != 'нет' %}
+    const expiry = new Date("{{ subscription_expires }}").getTime();
+
+    function updateTimer() {
+        const now = new Date().getTime();
+        const diff = expiry - now;
+        const el = document.getElementById("timer");
+        if (diff <= 0) {
+            el.innerText = "Подписка истекла ❌";
+            clearInterval(interval);
+        } else {
+            el.innerText = formatTimeLeft(diff);
+        }
+    }
+
+    updateTimer();
+    const interval = setInterval(updateTimer, 1000);
+    {% else %}
+    document.getElementById("timer").innerText = "Подписка истекла ❌";
+    {% endif %}
+</script>
+
+</body>
+</html>

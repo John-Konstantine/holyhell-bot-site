@@ -1,0 +1,277 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <title>Пользователи | ProfitBot</title>
+    <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@500&display=swap" rel="stylesheet">
+    <style>
+        @keyframes flicker {
+            0%, 18%, 22%, 25%, 50%, 53%, 100% { opacity: 1; }
+            19%, 23%, 51% { opacity: 0.4; }
+        }
+
+        body {
+            font-family: 'Orbitron', sans-serif;
+            background: url("stena.jpg") no-repeat center center fixed;
+            background-size: contain;
+            background-color: #000;
+            color: white;
+            margin: 0;
+            padding: 20px;
+        }
+
+        .logo {
+            font-size: 36px;
+            font-weight: bold;
+            color: #00ffff;
+            text-shadow: 0 0 5px #00ffff, 0 0 15px #00ffff, 0 0 30px #00ffff;
+            margin-bottom: 10px;
+            text-align: center;
+        }
+
+        h1 {
+            text-align: center;
+            color: #00ffff;
+            text-shadow: 0 0 10px #00ffff;
+            margin-bottom: 30px;
+            animation: flicker 4s infinite;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            background: rgba(0, 0, 0, 0.3);
+            border: 2px solid rgba(0, 255, 255, 0.2);
+            border-radius: 12px;
+            overflow: hidden;
+            box-shadow: 0 0 20px rgba(0, 255, 255, 0.1);
+        }
+
+        th, td {
+            padding: 12px;
+            text-align: left;
+            border-bottom: 1px solid #333;
+        }
+
+        th {
+            background-color: #1a1a1a;
+            color: #00ffff;
+        }
+
+        tr:hover {
+            background-color: rgba(0, 255, 255, 0.05);
+        }
+
+        .button {
+            padding: 6px 12px;
+            background-color: transparent;
+            color: #00ffff;
+            border: 2px solid #00ffff;
+            border-radius: 6px;
+            cursor: pointer;
+            font-family: 'Orbitron', sans-serif;
+            text-shadow: 0 0 4px #00ffff;
+            transition: 0.2s;
+            position: relative;
+        }
+
+        .button:hover {
+            background-color: rgba(0, 255, 255, 0.1);
+            box-shadow: 0 0 8px #00ffff;
+        }
+
+        .button::after {
+            content: attr(data-tooltip);
+            position: absolute;
+            bottom: 125%;
+            left: 50%;
+            transform: translateX(-50%);
+            background-color: rgba(0, 0, 0, 0.8);
+            color: #00ffff;
+            padding: 5px 10px;
+            border-radius: 5px;
+            white-space: nowrap;
+            font-size: 12px;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.2s;
+            z-index: 10;
+        }
+
+        .button:hover::after {
+            opacity: 1;
+        }
+
+        input[type="text"] {
+            width: 100px;
+            padding: 6px;
+            background-color: #1a1a1a;
+            color: white;
+            border: 1px solid #00ffff;
+            border-radius: 5px;
+        }
+
+        .timer {
+            font-weight: bold;
+            color: #00ff99;
+        }
+
+        .expired {
+            color: #ff4c4c;
+        }
+
+        .code-box {
+            display: none;
+            margin-top: 8px;
+        }
+
+        #log-area {
+            display: none;
+            margin-top: 20px;
+            background-color: rgba(0, 0, 0, 0.3);
+            padding: 15px;
+            border-radius: 10px;
+            border: 1px solid rgba(0, 255, 255, 0.2);
+        }
+
+        #log-area h2 {
+            color: #00ffff;
+            text-shadow: 0 0 8px #00ffff;
+        }
+    </style>
+</head>
+<body>
+<div class="logo">ProfitBot</div>
+<h1>🧾 Админ-панель пользователей</h1>
+
+<button class="button" onclick="toggleLog()">📋 Журнал действий</button>
+<a href="/dashboard" class="button">⬅ Вернуться на дашборд</a>
+
+<div id="log-area">
+    <h2>🕓 Журнал действий администратора</h2>
+    {% if log_entries %}
+        <ul>
+        {% for entry in log_entries %}
+            <li>[{{ entry.timestamp.strftime('%Y-%m-%d %H:%M:%S') }}] Администратор: {{ entry.admin_login }} | Действие: {{ entry.action }} | Пользователь: {{ entry.target_login }}</li>
+        {% endfor %}
+        </ul>
+    {% else %}
+        <p>Лог пуст.</p>
+    {% endif %}
+</div>
+
+<table>
+    <thead>
+        <tr>
+            <th>ID</th>
+            <th>Логин</th>
+            <th>Telegram ID</th>
+            <th>HWID</th>
+            <th>Регистрация</th>
+            <th>До конца подписки</th>
+            <th>Истекает</th>
+            <th colspan="4">Действия</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for user in users %}
+        <tr>
+            <td>{{ user.id }}</td>
+            <td>{{ user.login }}</td>
+            <td>{{ user.telegram_id }}</td>
+            <td>{{ user.hwid if user.hwid else "Не установлен" }}</td>
+            <td>
+                {% if user.subscription_expires_at %}
+                    {{ user.subscription_expires_at.strftime('%Y-%m-%d') }}
+                {% else %}
+                    Нет
+                {% endif %}
+            </td>
+            <td><span id="timer-{{ user.id }}">Загрузка...</span></td>
+            <td>
+                {% if user.subscription_expires_at %}
+                    {{ user.subscription_expires_at.strftime('%Y-%m-%d %H:%M:%S') }}
+                {% else %}
+                    Нет
+                {% endif %}
+            </td>
+            <td><button class="button" data-tooltip="Продлить подписку" onclick="startAction('{{ user.login }}', 'extend')">🔁</button></td>
+            <td><button class="button" data-tooltip="Удалить подписку" onclick="startAction('{{ user.login }}', 'remove-subscription')">❌</button></td>
+            <td><button class="button" data-tooltip="Удалить пользователя" onclick="startAction('{{ user.login }}', 'delete')">🗑️</button></td>
+            <td>
+                <div class="code-box" id="code-box-{{ user.login }}">
+                    <form method="post" id="form-{{ user.login }}">
+                        <input type="hidden" name="login" value="{{ user.login }}">
+                        <input type="text" name="code" placeholder="Код из Telegram" required>
+                        <button class="button" type="submit">✅</button>
+                    </form>
+                </div>
+            </td>
+        </tr>
+        {% endfor %}
+    </tbody>
+</table>
+
+<script>
+    function formatRemaining(ms) {
+        const s = Math.floor(ms / 1000);
+        const d = Math.floor(s / 86400);
+        const h = Math.floor((s % 86400) / 3600);
+        const m = Math.floor((s % 3600) / 60);
+        const sec = s % 60;
+        return `${d}д ${h}ч ${m}м ${sec}с`;
+    }
+
+    {% for user in users %}
+    (function() {
+        const timerEl = document.getElementById("timer-{{ user.id }}");
+        {% if user.subscription_expires_at %}
+        const expiry = new Date("{{ user.subscription_expires_at.isoformat() }}").getTime();
+        function update() {
+            const now = new Date().getTime();
+            const diff = expiry - now;
+            if (diff <= 0) {
+                timerEl.innerText = "Истекла";
+                timerEl.className = "expired";
+            } else {
+                timerEl.innerText = formatRemaining(diff);
+                timerEl.className = "timer";
+            }
+        }
+        update();
+        setInterval(update, 1000);
+        {% else %}
+        timerEl.innerText = "Нет";
+        timerEl.className = "expired";
+        {% endif %}
+    })();
+    {% endfor %}
+
+    function startAction(login, action) {
+        if (!confirm(`Вы уверены, что хотите выполнить "${action}" для пользователя "${login}"?`)) return;
+
+        document.querySelectorAll('.code-box').forEach(el => el.style.display = 'none');
+        document.getElementById('code-box-' + login).style.display = 'block';
+
+        const form = document.getElementById('form-' + login);
+        form.action = `/admin/${action}`;
+
+        fetch('/admin/send-code', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/x-www-form-urlencoded'},
+            body: `login=${encodeURIComponent(login)}`
+        }).then(r => {
+            if (!r.ok) {
+                alert("Ошибка при отправке кода в Telegram.");
+            }
+        });
+    }
+
+    function toggleLog() {
+        const area = document.getElementById("log-area");
+        area.style.display = area.style.display === "none" ? "block" : "none";
+    }
+</script>
+
+</body>
+</html>

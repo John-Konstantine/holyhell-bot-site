@@ -1,0 +1,40 @@
+{
+    "trading_pair": "RAY/USDT",
+    "initial_buy_percentage": 0.4,
+    "dip_percentage": 0.35,
+    "profit_percentage": 0.25,
+    "check_interval": 5,
+    "fee_percentage": 0.075,
+    "balance": 2953.74682495,
+    "positions": [],
+    "trade_history": [],
+    "total_profit": 0.0,
+    "last_sell_price": null,
+    "last_executed_buy_price": null,
+    "last_buy_dip_level": null,
+    "max_price_after_sell": 3.053,
+    "time_interval_enabled": true,
+    "time_interval_start_position": 7,
+    "time_interval_minutes": 60,
+    "emergency_buy_percentage": 100,
+    "interval_dip_percentage": 1.75,
+    "main_dip_increase_per_buy": 0.06,
+    "interval_dip_increase_per_buy": 0.25,
+    "main_buy_count": 0,
+    "interval_buy_count": 0,
+    "last_buy_timestamp": null,
+    "next_buy_allowed_time": null,
+    "timeout_extension_threshold": 5.0,
+    "timeout_extension_minutes": 60,
+    "timeout_extended": false,
+    "price_data": [],
+    "balance_data": [],
+    "trade_markers": {
+        "buy": [],
+        "sell": []
+    },
+    "levels_history": {
+        "buy": [],
+        "sell": []
+    }
+}

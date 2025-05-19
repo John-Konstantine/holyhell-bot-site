@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <title>Оплата успешна | ProfitBot</title>
+    <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@500&display=swap" rel="stylesheet">
+    <style>
+        @keyframes flicker {
+            0%, 18%, 22%, 25%, 50%, 53%, 100% { opacity: 1; }
+            19%, 23%, 51% { opacity: 0.4; }
+        }
+
+        body {
+            margin: 0;
+            padding: 0;
+            height: 100vh;
+            background: url("stena.jpg") no-repeat center center fixed;
+            background-size: contain;
+            background-color: #000;
+            font-family: 'Orbitron', sans-serif;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-direction: column;
+            color: white;
+            text-align: center;
+        }
+
+        .logo {
+            font-size: 36px;
+            font-weight: bold;
+            color: #00ff99;
+            text-shadow:
+                0 0 5px #00ff99,
+                0 0 15px #00ff99,
+                0 0 30px #00ff99;
+            margin-bottom: 20px;
+        }
+
+        .neon-box {
+            background: rgba(0, 0, 0, 0.15);
+            border: 2px solid rgba(0, 255, 150, 0.3);
+            padding: 40px 50px;
+            border-radius: 20px;
+            box-shadow:
+                0 0 10px rgba(0, 255, 150, 0.3),
+                0 0 40px rgba(0, 255, 150, 0.15),
+                inset 0 0 10px rgba(0, 255, 150, 0.1);
+            max-width: 600px;
+            width: 100%;
+        }
+
+        .success {
+            font-size: 24px;
+            color: #00ff99;
+            text-shadow: 0 0 10px #00ff99;
+            margin-bottom: 20px;
+            animation: flicker 3s infinite;
+        }
+
+        .btn {
+            display: inline-block;
+            padding: 12px 24px;
+            margin-top: 30px;
+            font-size: 16px;
+            font-weight: bold;
+            color: #00ff99;
+            background-color: transparent;
+            border: 2px solid #00ff99;
+            border-radius: 10px;
+            text-decoration: none;
+            transition: all 0.2s ease;
+            text-shadow: 0 0 4px #00ff99;
+        }
+
+        .btn:hover {
+            background-color: rgba(0, 255, 150, 0.1);
+            box-shadow: 0 0 10px #00ff99, 0 0 20px #00ff99;
+            transform: scale(1.03);
+        }
+    </style>
+</head>
+<body>
+    <div class="logo">ProfitBot</div>
+
+    <div class="neon-box">
+        <div class="success">✅ Оплата прошла успешно!</div>
+        <div>Подписка продлена на 30 дней.</div>
+        <a href="/dashboard" class="btn">Вернуться в личный кабинет</a>
+    </div>
+</body>
+</html>

@@ -1,0 +1,265 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <title>Вход | ProfitBot</title>
+    <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@500&display=swap" rel="stylesheet">
+    <style>
+        @keyframes flicker {
+            0%, 18%, 22%, 25%, 50%, 53%, 100% { opacity: 1; }
+            19%, 23%, 51% { opacity: 0.4; }
+        }
+
+        body {
+            margin: 0;
+            padding: 0;
+            height: 100vh;
+            background: url("stena.jpg") no-repeat center center fixed;
+            background-size: contain;
+            background-repeat: no-repeat;
+            background-color: #000;
+            font-family: 'Orbitron', sans-serif;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .logo {
+            font-size: 40px;
+            font-weight: bold;
+            color: #00ffff;
+            text-shadow: 0 0 5px #00ffff, 0 0 15px #00ffff, 0 0 30px #00ffff;
+            margin-bottom: 25px;
+            text-align: center;
+        }
+
+        .neon-box {
+            background: rgba(0, 0, 0, 0.15);
+            border: 2px solid rgba(0, 255, 255, 0.3);
+            padding: 40px 50px;
+            border-radius: 20px;
+            box-shadow:
+                0 0 10px rgba(0, 255, 255, 0.3),
+                0 0 40px rgba(0, 255, 255, 0.15),
+                inset 0 0 10px rgba(0, 255, 255, 0.1);
+            text-align: center;
+            max-width: 400px;
+            width: 100%;
+        }
+
+        h2 {
+            color: #00ffff;
+            text-shadow: 0 0 10px #00ffff;
+            margin-bottom: 25px;
+            animation: flicker 4s infinite;
+        }
+
+        form {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+        }
+
+        input[type="text"], input[type="password"] {
+            width: 100%;
+            padding: 12px;
+            margin: 10px 0;
+            background-color: rgba(0, 0, 0, 0.4);
+            border: 1px solid #00ffff;
+            border-radius: 8px;
+            color: white;
+            font-size: 14px;
+            text-align: center;
+        }
+
+        input::placeholder {
+            color: #88ffff;
+        }
+
+        input:focus {
+            outline: none;
+            box-shadow: 0 0 8px #00ffff;
+        }
+
+        .toggle-password {
+            margin-top: -5px;
+            margin-bottom: 15px;
+            cursor: pointer;
+            color: #88ffff;
+            font-size: 14px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+        }
+
+        .toggle-password svg {
+            width: 20px;
+            height: 20px;
+            fill: #00ffff;
+        }
+
+        .forgot-btn {
+            color: #88ffff;
+            text-decoration: underline;
+            cursor: pointer;
+            margin-bottom: 10px;
+            font-size: 13px;
+        }
+
+        .forgot-section,
+        #new-password-section {
+            display: none;
+            flex-direction: column;
+            align-items: center;
+            margin-top: 10px;
+            width: 100%;
+        }
+
+        button {
+            width: 100%;
+            padding: 12px;
+            font-size: 14px;
+            font-weight: bold;
+            color: #00ffff;
+            background-color: transparent;
+            border: 2px solid #00ffff;
+            border-radius: 10px;
+            text-shadow: 0 0 5px #00ffff;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            text-align: center;
+            margin-top: 10px;
+        }
+
+        button:hover {
+            box-shadow: 0 0 10px #00ffff, 0 0 20px #00ffff;
+            background-color: rgba(0, 255, 255, 0.1);
+            transform: scale(1.03);
+        }
+
+        .error {
+            color: #ff4c4c;
+            margin-bottom: 10px;
+            font-size: 14px;
+        }
+    </style>
+</head>
+<body>
+
+<div class="logo">ProfitBot</div>
+
+<div class="neon-box">
+    <h2>Вход в систему</h2>
+
+    {% if error %}
+        <p class="error">{{ error }}</p>
+    {% endif %}
+
+    <form method="post" action="/login">
+        <input type="text" name="login" placeholder="Логин" required autofocus>
+        <input type="password" name="password" placeholder="Пароль" id="password" required>
+
+        <div class="toggle-password" onclick="togglePassword()">
+            <span id="toggle-text">Показать пароль</span>
+            <svg id="eye-icon" viewBox="0 0 24 24">
+                <path d="M12 5c-7 0-10 7-10 7s3 7 10 7 10-7 10-7-3-7-10-7zm0 12a5 5 0 1 1 0-10 5 5 0 0 1 0 10z"/>
+            </svg>
+        </div>
+
+        <div class="forgot-btn" onclick="toggleForgot()">Забыл пароль?</div>
+
+        <div class="forgot-section" id="forgot-section">
+            <input type="text" id="reset-code" placeholder="Введите код из Telegram">
+            <button type="button" onclick="applyResetCode()">Подтвердить код</button>
+        </div>
+
+        <div id="new-password-section">
+            <input type="password" id="new-password" placeholder="Новый пароль">
+            <input type="password" id="confirm-password" placeholder="Повторите пароль">
+            <button type="button" onclick="submitNewPassword()">Сбросить пароль</button>
+        </div>
+
+        <button type="submit">Войти</button>
+    </form>
+</div>
+
+<script>
+    let isPasswordVisible = false;
+    let currentCode = "";
+    let currentLogin = "";
+
+    function togglePassword() {
+        const pwd = document.getElementById("password");
+        const icon = document.getElementById("eye-icon");
+        const text = document.getElementById("toggle-text");
+        if (isPasswordVisible) {
+            pwd.type = "password";
+            icon.innerHTML = '<path d="M12 5c-7 0-10 7-10 7s3 7 10 7 10-7 10-7-3-7-10-7zm0 12a5 5 0 1 1 0-10 5 5 0 0 1 0 10z"/>';
+            text.textContent = "Показать пароль";
+        } else {
+            pwd.type = "text";
+            icon.innerHTML = '<path d="M12 5c-7 0-10 7-10 7s3 7 10 7c1.77 0 3.36-.37 4.82-.99l1.66 1.66 1.41-1.41L3.51 3.51 2.1 4.92l2.29 2.29C3.09 8.56 2 10 2 10s3 7 10 7c2.16 0 4.16-.57 5.87-1.54l1.57 1.57 1.41-1.41L3.51 3.51z"/>';
+            text.textContent = "Скрыть пароль";
+        }
+        isPasswordVisible = !isPasswordVisible;
+    }
+
+    function toggleForgot() {
+        const section = document.getElementById("forgot-section");
+        section.style.display = section.style.display === "flex" ? "none" : "flex";
+    }
+
+    function applyResetCode() {
+        const code = document.getElementById("reset-code").value.trim();
+        const login = document.querySelector('input[name="login"]').value.trim();
+        currentLogin = login;
+        currentCode = code;
+
+        fetch("/confirm-reset-code", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ login, code })
+        })
+        .then(res => res.json())
+        .then(data => {
+            if (data.success) {
+                document.getElementById("new-password-section").style.display = "flex";
+            } else {
+                alert(data.error || "Неверный код");
+            }
+        });
+    }
+
+    function submitNewPassword() {
+        const p1 = document.getElementById("new-password").value;
+        const p2 = document.getElementById("confirm-password").value;
+
+        if (p1.length < 6) return alert("Пароль должен быть минимум 6 символов");
+        if (p1 !== p2) return alert("Пароли не совпадают");
+
+        fetch("/reset-password", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+                login: currentLogin,
+                code: currentCode,
+                new_password: p1
+            })
+        })
+        .then(res => res.json())
+        .then(data => {
+            if (data.success) {
+                alert("Пароль изменён. Войдите заново.");
+                location.href = "/login";
+            } else {
+                alert(data.error || "Ошибка сброса пароля");
+            }
+        });
+    }
+</script>
+
+</body>
+</html>

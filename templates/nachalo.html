@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <title>ProfitBot</title>
+    <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@500&display=swap" rel="stylesheet">
+    <style>
+        @keyframes flicker {
+            0%, 18%, 22%, 25%, 50%, 53%, 100% { opacity: 1; }
+            19%, 23%, 51% { opacity: 0.4; }
+        }
+
+        body {
+            margin: 0;
+            padding: 0;
+            height: 100vh;
+            background: url("stena.jpg") no-repeat center center fixed;
+            background-size: contain;
+            background-repeat: no-repeat;
+            background-color: #000; /* если будут края — пусть будут чёрные */
+            font-family: 'Orbitron', sans-serif;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+
+
+        .neon-box {
+            background: rgba(0, 0, 0, 0.15);
+            border: 2px solid rgba(0, 255, 255, 0.3);
+            padding: 40px 60px;
+            border-radius: 20px;
+            box-shadow:
+                0 0 10px rgba(0, 255, 255, 0.3),
+                0 0 40px rgba(0, 255, 255, 0.15),
+                inset 0 0 10px rgba(0, 255, 255, 0.1);
+            text-align: center;
+        }
+
+        .logo {
+            font-size: 48px;
+            font-weight: bold;
+            color: #00ffff;
+            text-shadow:
+                0 0 5px #00ffff,
+                0 0 15px #00ffff,
+                0 0 30px #00ffff;
+            margin-bottom: 15px;
+        }
+
+        .tagline {
+            font-size: 16px;
+            color: #aaffff;
+            margin-bottom: 30px;
+            line-height: 1.6;
+            text-shadow: 0 0 5px #00ffff;
+            animation: flicker 4s infinite;
+        }
+
+        .btn {
+            display: inline-block;
+            margin: 10px 20px;
+            padding: 12px 30px;
+            font-size: 16px;
+            color: #00ffff;
+            background-color: transparent;
+            border: 2px solid #00ffff;
+            border-radius: 10px;
+            text-decoration: none;
+            font-weight: bold;
+            transition: all 0.3s ease;
+            text-shadow: 0 0 5px #00ffff;
+        }
+
+        .btn:hover {
+            box-shadow: 0 0 10px #00ffff, 0 0 20px #00ffff;
+            background-color: rgba(0, 255, 255, 0.1);
+            transform: scale(1.05);
+        }
+    </style>
+</head>
+<body>
+    <div class="neon-box">
+        <div class="logo">ProfitBot</div>
+        <div class="tagline">
+            ProfitBot — это баланс дисциплины и жадности, ты не выбираешь сторону — ты используешь обе. <br>
+        </div>
+        <a href="/login" class="btn">Войти</a>
+        <a href="/register" class="btn">Зарегистрироваться</a>
+    </div>
+</body>
+</html>

@@ -1,0 +1,144 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <title>Подтверждение администратора</title>
+    <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@500&display=swap" rel="stylesheet">
+    <style>
+        @keyframes flicker {
+            0%, 18%, 22%, 25%, 50%, 53%, 100% { opacity: 1; }
+            19%, 23%, 51% { opacity: 0.4; }
+        }
+
+        body {
+            margin: 0;
+            padding: 0;
+            height: 100vh;
+            background: url("stena.jpg") no-repeat center center fixed;
+            background-size: contain;
+            background-repeat: no-repeat;
+            background-color: #000;
+            font-family: 'Orbitron', sans-serif;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+
+        .neon-box {
+            background: rgba(0, 0, 0, 0.15);
+            border: 2px solid rgba(0, 255, 255, 0.3);
+            padding: 40px 60px;
+            border-radius: 20px;
+            box-shadow:
+                0 0 10px rgba(0, 255, 255, 0.3),
+                0 0 40px rgba(0, 255, 255, 0.15),
+                inset 0 0 10px rgba(0, 255, 255, 0.1);
+            text-align: center;
+            width: 400px;
+        }
+
+        h2 {
+            color: #00ffff;
+            text-shadow:
+                0 0 5px #00ffff,
+                0 0 15px #00ffff;
+            margin-bottom: 20px;
+        }
+
+        .timer {
+            font-size: 14px;
+            color: #aaffff;
+            margin-bottom: 15px;
+            text-shadow: 0 0 5px #00ffff;
+            animation: flicker 4s infinite;
+        }
+
+        input[type="text"] {
+            width: 100%;
+            padding: 12px;
+            margin: 10px 0;
+            background-color: rgba(0, 0, 0, 0.4);
+            border: 1px solid #00ffff;
+            border-radius: 8px;
+            color: white;
+            font-size: 14px;
+            text-align: center;
+        }
+
+        input::placeholder {
+            color: #88ffff;
+        }
+
+        input:focus {
+            outline: none;
+            box-shadow: 0 0 8px #00ffff;
+        }
+
+        button {
+            width: 100%;
+            padding: 12px;
+            font-size: 14px;
+            font-weight: bold;
+            color: #00ffff;
+            background-color: transparent;
+            border: 2px solid #00ffff;
+            border-radius: 10px;
+            text-shadow: 0 0 5px #00ffff;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        button:hover {
+            box-shadow: 0 0 10px #00ffff, 0 0 20px #00ffff;
+            background-color: rgba(0, 255, 255, 0.1);
+            transform: scale(1.03);
+        }
+
+        .error {
+            color: #ff4b4b;
+            margin-bottom: 10px;
+            font-size: 14px;
+        }
+    </style>
+</head>
+<body>
+
+<div class="neon-box">
+    <h2>Код подтверждения</h2>
+
+    {% if error %}
+        <p class="error">{{ error }}</p>
+    {% endif %}
+
+    <div class="timer">
+        Действителен ещё: <span id="countdown">—</span>
+    </div>
+
+    <form method="post">
+        <input type="text" name="code" placeholder="Введите код из Telegram" required>
+        <button type="submit">Подтвердить</button>
+    </form>
+</div>
+
+<script>
+    let totalSeconds = {{ debug.remaining if debug and debug.remaining != '-' else 0 }};
+
+    function updateTimer() {
+        const el = document.getElementById("countdown");
+        if (totalSeconds <= 0) {
+            el.textContent = "Код истёк";
+            return;
+        }
+
+        let minutes = Math.floor(totalSeconds / 60);
+        let seconds = totalSeconds % 60;
+        el.textContent = `${minutes}:${String(seconds).padStart(2, '0')}`;
+        totalSeconds--;
+        setTimeout(updateTimer, 1000);
+    }
+
+    updateTimer();
+</script>
+
+</body>
+</html>
